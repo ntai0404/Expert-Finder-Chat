@@ -53,6 +53,22 @@ html, body {
     }
 }
 
+/* Mobile specific layout (max-width 767.98px) */
+@media (max-width: 767.98px) {
+    .row.h-100 {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    .map-area {
+        height: 40% !important;
+        border-right: none !important;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .chat-area {
+        height: 60% !important;
+    }
+}
+
 /* --- Map Area --- */
 #map-container {
     height: 100%;
