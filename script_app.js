@@ -740,7 +740,7 @@ function injectPhoneModal() {
                 <div class="modal-body text-center p-4">
                     <div class="mb-3">
                         <i class="fas fa-gift fa-3x text-warning mb-3"></i>
-                        <p class="fs-5 fw-bold" style="color: #333;">Để lại SĐT để được Admins hỗ trợ rieng nhé!</p>
+                        <p class="fs-5 fw-bold" style="color: #333;">Để lại SĐT để được Admins hỗ trợ riêng nhé!</p>
                         <p class="text-muted small">Chúng tôi sẽ add bạn vào nhóm Zalo VIP & Gửi mã giảm giá.</p>
                     </div>
                     <div class="form-floating mb-3">
