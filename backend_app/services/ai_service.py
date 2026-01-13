@@ -15,6 +15,25 @@ logger = logging.getLogger(__name__)
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 
+# Cache for AI standardization
+AI_ADDR_CACHE_FILE = os.path.join(os.path.dirname(__file__), '..', 'ai_address_cache.json')
+
+def load_ai_cache():
+    if os.path.exists(AI_ADDR_CACHE_FILE):
+        try:
+            with open(AI_ADDR_CACHE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_ai_cache(cache):
+    try:
+        with open(AI_ADDR_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except:
+        pass
+
 # Initialize Client
 client = None
 
@@ -140,3 +159,46 @@ async def smart_product_filter(query: str, products: List[Any]) -> Dict[str, Any
         "reasoning": "Pass-through (Optimized)",
         "ai_message_template": "Dạ có {{product_name}} tại {{shop_name}} ạ."
     }
+
+async def standardize_address_ai(ward: str, district: str, city: str) -> str:
+    """
+    Standardizes address components using DeepSeek AI.
+    Uses local cache to minimize API calls.
+    """
+    cache = load_ai_cache()
+    raw_key = f"{ward}|{district}|{city}"
+    
+    if raw_key in cache:
+        return cache[raw_key]
+    
+    global client
+    if not client:
+        configure_genai()
+    
+    if not client:
+        return f"{ward}, {district}, {city}"
+        
+    prompt = f"""Bạn là chuyên gia về địa lý Việt Nam. 
+    Hãy chuẩn hóa địa chỉ sau thành định dạng chuẩn nhất để bản đồ có thể xác định được tọa độ.
+    Dữ liệu thô: {ward}, {district}, {city}
+
+    Quy tắc:
+    1. Giữ nguyên cấp hành chính: Nếu là "Thị trấn" thì ghi "Thị trấn", không được tự ý đổi thành "Xã".
+    2. Giải mã viết tắt: "Q." -> "Quận", "P." -> "Phường", "TP." -> "Thành phố", "TP.HCM" -> "Thành phố Hồ Chí Minh".
+    3. Định dạng trả về: "Tên Phường/Xã/Thị trấn, Tên Quận/Huyện/Thị xã/Thành phố thuộc tỉnh, Tên Tỉnh/Thành phố trực thuộc trung ương".
+    4. Chỉ trả về 1 dòng địa chỉ duy nhất, không giải thích gì thêm.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1
+        )
+        clean_addr = response.choices[0].message.content.strip()
+        cache[raw_key] = clean_addr
+        save_ai_cache(cache)
+        return clean_addr
+    except Exception as e:
+        logger.error(f"AI Address Standarization Error: {e}")
+        return f"{ward}, {district}, {city}"

@@ -21,7 +21,12 @@ Thumbs.db
 
 # Project specific debug files
 debug_server.py
-backend-app/debug_server.py
-backend-app/verify_server.py
-backend-app/list_models.py
-backend-app/cache/
+backend_app/debug_server.py
+backend_app/verify_server.py
+backend_app/list_models.py
+backend_app/cache/
+
+# Test and Cache
+test/
+*cache.json
+googlesheet_service_account.json

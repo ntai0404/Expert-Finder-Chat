@@ -3,7 +3,10 @@ import os
 import sys
 
 # Import from geo_service
-from services.geo_service import geocode_address, build_address, load_cache
+from services.geo_service import geocode_address, build_address, load_cache, apply_jitter
+
+# Import from ai_service
+from services.ai_service import standardize_address_ai
 
 # Google Sheets Configuration
 PRODUCT_SPREADSHEET_ID = "1ekdjU2lJK1MnBzwFr3B8ws2E8GnK1omLJNbIU8puXPI"
@@ -111,7 +114,15 @@ def load_all_products():
         print("\n❌ No products loaded")
         return pd.DataFrame()
 
-def aggregate_shops(products_df):
+# Safe Anchors for problematic areas where OSM fails or lands in sea
+SAFE_ANCHORS = {
+    "Huyện Giao Thủy": (20.252, 106.519), # Ngô Đồng Town Center
+    "Huyện Vĩnh Tường": (21.256, 105.478), # Vĩnh Tường Town Center
+    "Huyện Hoài Đức": (21.02, 105.71),
+    "Huyện Thanh Thủy": (21.12, 105.29)
+}
+
+async def aggregate_shops(products_df):
     """Aggregate products by shop"""
     print(f"\n🏪 Aggregating products by shop...")
     
@@ -124,6 +135,7 @@ def aggregate_shops(products_df):
     for shop_id, group in shop_groups:
         # Get shop info from first product
         first_product = group.iloc[0]
+        shop_name = str(first_product.get('Tên Shop', 'Unknown Shop'))
         
         # Extract unique categories
         categories = group['Danh mục'].dropna().unique().tolist()
@@ -135,14 +147,57 @@ def aggregate_shops(products_df):
         
         address = build_address(ward, district, city)
         
-        # Geocode address
-        coords = geocode_address(address, geocode_cache)
+        # 1. AI Standardization
+        clean_address = await standardize_address_ai(ward, district, city)
         
+        # 2. Geocoding (Multi-stage with Safe Anchors & Latitude Lock)
+        # Expected Latitudes: North (Hà Nội, Vĩnh Phúc) ~21, Central (Đà Nẵng) ~16, South (HCM) ~10
+        expected_lat = 21 # Default North
+        city_norm = str(city).lower()
+        if "hồ chí minh" in city_norm or "quận 7" in city_norm or "bình thạnh" in city_norm: expected_lat = 10
+        elif "đà nẵng" in city_norm: expected_lat = 16
+        elif "ninh bình" in city_norm or "nam định" in city_norm: expected_lat = 20
+        elif "bình định" in city_norm or "qui nhơn" in city_norm: expected_lat = 13
+
+        coords = None
+        source_stage = "Unknown"
+        
+        # Priority 1: Check Safe Anchors
+        dist_str = str(district).strip()
+        if dist_str.upper() in [k.upper() for k in SAFE_ANCHORS]:
+            actual_key = next(k for k in SAFE_ANCHORS if k.upper() == dist_str.upper())
+            print(f"      ⚓ [STAGE 1] Using Safe Anchor for '{dist_str}'")
+            coords = SAFE_ANCHORS[actual_key]
+            source_stage = "Safe Anchor"
+            
+        # Priority 2: Standard Geocoding with Province Validation
+        if not coords:
+            variations = [
+                ("Clean AI", clean_address),
+                ("District/City", f"{district}, {city}"),
+                ("City Focus", city)
+            ]
+            for stage_name, addr_var in variations:
+                if not addr_var or len(addr_var.strip()) < 3: continue
+                res = geocode_address(addr_var, geocode_cache, expected_province=city)
+                if res and abs(res[0] - expected_lat) <= 1.5:
+                    print(f"      ✅ [STAGE 2] {stage_name} success for '{addr_var}' -> {res}")
+                    coords = res
+                    source_stage = f"OSM ({stage_name})"
+                    break
+        
+        # Emergency Fallback to province center
+        if not coords:
+            print(f"      🚨 [STAGE 3] Emergency Fallback for '{city}'")
+            coords = geocode_address(city, geocode_cache)
+            source_stage = "Province Center"
+            
         if coords:
-            lat, lng = coords
+            lat, lng = apply_jitter(coords[0], coords[1])
+            print(f"      📍 [FINAL] {shop_name} -> [{lat:.5f}, {lng:.5f}] (via {source_stage})")
         else:
-            # Fallback to center of Vietnam
-            lat, lng = 16.0544, 108.2022
+            print(f"      ❌ [FINAL] {shop_name} -> FAILED ALL STAGES (Defaulting to Hanoi)")
+            lat, lng = (21.0, 105.8) 
         
         # Try to find 'Link Zalo' column with case-insensitive search
         zalo_link = ''
@@ -190,7 +245,7 @@ def aggregate_shops(products_df):
     
     return shops_df
 
-def load_stores_data():
+async def load_stores_data():
     """Main function to load and process store data"""
     print("\n" + "=" * 80)
     print("LOADING STORE DATA FROM NEW GOOGLE SHEETS")
@@ -204,7 +259,7 @@ def load_stores_data():
         return pd.DataFrame(), pd.DataFrame()
     
     # Aggregate into shops
-    shops_df = aggregate_shops(products_df)
+    shops_df = await aggregate_shops(products_df)
     
     print("\n" + "=" * 80)
     print(f"✅ DATA LOADED SUCCESSFULLY: {len(shops_df)} shops")

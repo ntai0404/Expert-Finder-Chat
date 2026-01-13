@@ -205,7 +205,7 @@ async def startup_event():
     logger.info("Starting up application...")
     
     # Load Data
-    stores_dataframe, products_dataframe, unique_categories = load_stores_data()
+    stores_dataframe, products_dataframe, unique_categories = await load_stores_data()
     
     # DEBUG: Check Staff Zalo Data Quality
     if not products_dataframe.empty:
