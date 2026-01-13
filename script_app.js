@@ -724,7 +724,7 @@ function revealNextBatch(btn) {
 }
 
 // --- LEAD GENERATION TRACKING WITH POPUP ---
-let pendingLeadData = null; // Store data while waiting for phone input
+let pendingLeadData = null; // Store data while waiting for phone 
 
 // 1. Inject Modal HTML into DOM
 function injectPhoneModal() {
