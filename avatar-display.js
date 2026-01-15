@@ -57,12 +57,14 @@
                     `;
                 }
 
-                // IMPORTANT: Put "Trợ lý ảo" on LEFT, user info on RIGHT
-                // Order: Avatar -> Name -> Action Button
+                // IMPORTANT: Put "Beenet.vn" on LEFT, user info and share button on RIGHT
                 chatHeader.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center w-100">
-                        <h5 class="m-0"><img src="assets/bot-logo.jpg" alt="Logo" class="bot-logo-img">Trợ lý ảo</h5>
+                        <h5 class="m-0"><img src="assets/bot-logo.jpg" alt="Logo" class="bot-logo-img">Beenet.vn</h5>
                         <div class="d-flex align-items-center gap-2">
+                             <button id="share-btn" class="btn btn-sm d-flex align-items-center gap-1" title="Chia sẻ đoạn chat">
+                                <i class="material-icons" style="font-size: 18px;">share</i> Chia sẻ
+                            </button>
                             ${userInfoHtml} <!-- Contains Avatar + Name -->
                             ${actionBtnHtml}
                         </div>

@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import sys
 
 # Import from geo_service
 from services.geo_service import geocode_address, build_address, load_cache, apply_jitter
@@ -14,8 +13,6 @@ LEAD_SPREADSHEET_ID = "1DpoiGqwW5DysTFtW7OOYYcL7B8n1Zs4GIpNwAVA6Dys" # New Lead 
 
 # Auth for Writing (Private Sheet)
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-JSON_KEYFILE = 'googlesheet_service_account.json'
 
 
 # All sheet GIDs (product categories)
@@ -92,8 +89,13 @@ def load_all_products():
     
     for gid, category_name in SHEET_GIDS.items():
         try:
+            print(f"  ... Fetching: {category_name} (GID: {gid})")
+            # Anti-bot / Rate-limit fix
+            import time
+            time.sleep(0.5) 
+            
             csv_url = f"https://docs.google.com/spreadsheets/d/{PRODUCT_SPREADSHEET_ID}/export?format=csv&gid={gid}"
-            df = pd.read_csv(csv_url)
+            df = pd.read_csv(csv_url, storage_options={'User-Agent': 'Mozilla/5.0'})
             
             # Add category if not exists
             if 'Danh mục' not in df.columns:
@@ -103,7 +105,7 @@ def load_all_products():
             print(f"  ✓ {category_name}: {len(df)} products")
             
         except Exception as e:
-            # print(f"  ✗ {category_name}: Error - {e}") # SILENCED
+            print(f"  ✗ {category_name}: Error - {e}")
             pass
     
     if all_products:
@@ -256,7 +258,7 @@ async def load_stores_data():
     
     if products_df.empty:
         print("❌ No data loaded")
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), []
     
     # Aggregate into shops
     shops_df = await aggregate_shops(products_df)
@@ -273,40 +275,38 @@ def save_lead(lead_data: dict) -> bool:
     Data format: {timestamp, user_name, user_id, product_name, shop_name, context, zalo_contact, status}
     """
     try:
-        # 1. Auth Strategy (Modern gspread)
-        creds_dict = None
+        # 1. Auth Strategy (File-based)
+        # Prioritize using the JSON file specified in env or default
+        key_file_path = os.environ.get("GOOGLE_SHEET_KEY_PATH", "ggsheet-key.json")
         
-        # Check Env Vars first
-        private_key = os.environ.get("GOOGLE_PRIVATE_KEY")
-        client_email = os.environ.get("GOOGLE_CLIENT_EMAIL")
-        
-        if private_key and client_email:
-            if "\\n" in private_key:
-                private_key = private_key.replace("\\n", "\n")
-                
-            creds_dict = {
-                "type": "service_account",
-                "project_id": os.environ.get("GOOGLE_PROJECT_ID", ""),
-                "private_key_id": os.environ.get("GOOGLE_PRIVATE_KEY_ID", ""),
-                "private_key": private_key,
-                "client_email": client_email,
-                "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                "client_x509_cert_url": os.environ.get("GOOGLE_CLIENT_CERT_URL", "")
-            }
-            # Use gspread native auth
-            client = gspread.service_account_from_dict(creds_dict)
-            print("✅ Loaded Credentials from Environment Variables (Modern Auth)")
-            
-        elif os.path.exists(JSON_KEYFILE):
-            # Fallback to local JSON file
-            client = gspread.service_account(filename=JSON_KEYFILE)
-            print("⚠️ Loaded Credentials from local JSON file")
-            
+        if os.path.exists(key_file_path):
+            client = gspread.service_account(filename=key_file_path)
+            print(f"✅ Loaded Credentials from file: {key_file_path}")
         else:
-            raise FileNotFoundError("Authentication Failed: No JSON file or .env variables found.")
+            # Fallback to Env Vars (Legacy)
+            private_key = os.environ.get("GOOGLE_PRIVATE_KEY")
+            client_email = os.environ.get("GOOGLE_CLIENT_EMAIL")
+            
+            if private_key and client_email:
+                if "\\n" in private_key:
+                    private_key = private_key.replace("\\n", "\n")
+                    
+                creds_dict = {
+                    "type": "service_account",
+                    "project_id": os.environ.get("GOOGLE_PROJECT_ID", ""),
+                    "private_key_id": os.environ.get("GOOGLE_PRIVATE_KEY_ID", ""),
+                    "private_key": private_key,
+                    "client_email": client_email,
+                    "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_x509_cert_url": os.environ.get("GOOGLE_CLIENT_CERT_URL", "")
+                }
+                client = gspread.service_account_from_dict(creds_dict)
+                print("⚠️ Loaded Credentials from Environment Variables (Backup)")
+            else:
+                 raise FileNotFoundError(f"Authentication Failed: Key file '{key_file_path}' not found and no Env Vars.")
 
         # 2. Open Sheet and Tab
         sheet = client.open_by_key(LEAD_SPREADSHEET_ID)

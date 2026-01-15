@@ -502,44 +502,83 @@ function removeAllLoadingIndicators() {
 }
 
 // --- Initialization & Simple Permission Logic ---
+// --- Initialization & Simple Permission Logic ---
 document.addEventListener('DOMContentLoaded', () => {
     initializeMap();
-    loadHistory(); // Reload history first
 
-    // Safety: Remove any indicators that might have leaked into history or remained stuck
-    removeAllLoadingIndicators();
+    // Process parameters FIRST to determine mode
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareId = urlParams.get('share');
 
-    // Try to restore cached location
+    // MODE DECISION: Shared Chat vs Normal Session
+    if (shareId) {
+        console.log("🚀 Mode: Shared Chat detected. Skipping local history.");
+        // Shared Mode: Directly load shared content
+        // Do NOT loadHistory() to avoid conflict
+        handleSharedChat(shareId);
+
+        // Safety: Remove any indicators
+        removeAllLoadingIndicators();
+
+    } else {
+        console.log("👤 Mode: Normal Session. Loading local history.");
+        loadHistory(); // Reload local history
+
+        // Safety: Remove any indicators
+        removeAllLoadingIndicators();
+
+        // Send welcome message (Only in Normal Mode)
+        if (!sessionStorage.getItem('welcomeShown')) {
+            setTimeout(() => {
+                appendMessage('ai', 'Xin chào! Chào mừng bạn đến với <b>Beenet.vn</b> 🐝✨<br>Hệ thống mua sắm sắm theo vị trí tiện lợi nhất. Mình có thể giúp gì cho bạn hôm nay?');
+                sessionStorage.setItem('welcomeShown', 'true');
+
+                // Proactively ask for permission
+                if (!currentUserLocation) {
+                    setTimeout(() => {
+                        const ask = window.confirm("Beenet.vn muốn biết vị trí của bạn để tìm cửa hàng gần nhất nhé?");
+                        if (ask) {
+                            handleLocationCheck(true);
+                        }
+                    }, 1500);
+                }
+            }, 500);
+        }
+    }
+
+    // Try to restore cached location (Common for both)
     const cachedLocation = sessionStorage.getItem('last_location');
     if (cachedLocation) {
         currentUserLocation = JSON.parse(cachedLocation);
         updateMap(currentUserLocation.lat, currentUserLocation.lng, null);
     }
 
-    // Send welcome message
-    if (!sessionStorage.getItem('welcomeShown')) {
-        setTimeout(() => {
-            appendMessage('ai', 'Xin chào! Chào mừng bạn đến với <b>Beenet.vn</b> 🐝✨<br>Hệ thống mua sắm sắm theo vị trí tiện lợi nhất. Mình có thể giúp gì cho bạn hôm nay?');
-            sessionStorage.setItem('welcomeShown', 'true');
-
-            // Proactively ask for permission using simple browser confirm()
-            if (!currentUserLocation) {
-                setTimeout(() => {
-                    const ask = window.confirm("Beenet.vn muốn biết vị trí của bạn để tìm cửa hàng gần nhất nhé?");
-                    if (ask) {
-                        handleLocationCheck(true);
-                    }
-                }, 1500);
-            }
-        }, 500);
+    // --- Share Button Logic ---
+    const shareBtn = document.getElementById('share-btn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', handleShare);
     }
 
-    // Process product interest from query params (when redirected from /view page)
-    const urlParams = new URLSearchParams(window.location.search);
+    const copyShareBtn = document.getElementById('copy-share-link');
+    if (copyShareBtn) {
+        copyShareBtn.addEventListener('click', () => {
+            const input = document.getElementById('share-link-input');
+            input.select();
+            document.execCommand('copy');
+            alert('Đã copy link chia sẻ vào bộ nhớ tạm! 📋');
+        });
+    }
+
+    const forkChatBtn = document.getElementById('fork-chat-btn');
+    if (forkChatBtn) {
+        forkChatBtn.addEventListener('click', forkChat);
+    }
+
+    // OTHER PARAMS (Proxies, Deep links)
     const productId = urlParams.get('product_interest');
     const productName = urlParams.get('product_name');
-    const zaloFromUrl = urlParams.get('zalo'); // PERSISTENCE FROM PROXY
-    const staffZaloFromUrl = urlParams.get('staff_zalo'); // PERSISTENCE FROM PROXY
+    const zaloFromUrl = urlParams.get('zalo');
+    const staffZaloFromUrl = urlParams.get('staff_zalo');
 
     console.log("DEBUG: Init Params - ID:", productId, "Name:", productName, "Zalo:", zaloFromUrl, "Staff Zalo:", staffZaloFromUrl);
 
@@ -953,6 +992,130 @@ async function submitLeadPayload(phone) {
     // Reset
     pendingLeadData = null;
     document.getElementById('userPhoneInput').value = ''; // Clear input
+}
+
+// --- Sharing & Forking Functions ---
+
+async function handleShare() {
+    if (chatHistory.length === 0) {
+        alert("Chưa có nội dung gì để chia sẻ bạn ơi! 🐝");
+        return;
+    }
+
+    const shareBtn = document.getElementById('share-btn');
+    const originalContent = shareBtn.innerHTML;
+    shareBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+    shareBtn.disabled = true;
+
+    try {
+        const payload = {
+            messages: chatHistory,
+            user_info: {
+                name: localStorage.getItem('user_name') || "Khách",
+                avatar: localStorage.getItem('user_picture') || ""
+            }
+        };
+
+        const response = await fetch('/api/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error("API Share failed");
+
+        const data = await response.json();
+        const shareUrl = `${window.location.origin}${window.location.pathname}?share=${data.share_id}`;
+
+        // Show Modal
+        const input = document.getElementById('share-link-input');
+        input.value = shareUrl;
+
+        const modalEl = document.getElementById('shareModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+    } catch (e) {
+        console.error("Sharing error:", e);
+        alert("Lỗi khi tạo link chia sẻ. Vui lòng thử lại sau.");
+    } finally {
+        shareBtn.innerHTML = originalContent;
+        shareBtn.disabled = false;
+    }
+}
+
+let sharedChatData = null;
+
+async function handleSharedChat(shareId) {
+    console.log("🔗 Loading shared chat:", shareId);
+
+    // Show loading state in chat
+    const loadingMsg = appendMessage('ai', '<i>Đang nạp cuộc hội thoại được chia sẻ...</i>');
+
+    try {
+        const response = await fetch(`/api/share/${shareId}`);
+        if (!response.ok) throw new Error("Failed to load shared chat");
+
+        const data = await response.json();
+        sharedChatData = data;
+
+        // Clear current view and history placeholder
+        chatMessages.innerHTML = '';
+
+        // Render shared messages
+        const messages = data.messages || [];
+        messages.forEach(item => {
+            if (item.type === 'message') {
+                renderMessage(item.sender, item.text, false);
+            } else if (item.type === 'stores') {
+                renderStoreCards(item.data, false);
+            }
+        });
+
+        // Show Shared Mode Banner with original user's name
+        const banner = document.getElementById('shared-mode-banner');
+        const bannerText = document.getElementById('shared-banner-text');
+        const originalName = data.user_info ? data.user_info.name : 'một người dùng';
+
+        bannerText.innerHTML = `<i class="material-icons" style="vertical-align: middle; font-size: 18px;">info</i> Bạn đang xem đoạn chat được chia sẻ từ <b>${originalName}</b>.`;
+        banner.style.setProperty('display', 'flex', 'important');
+
+        // Disable Input until "Fork"
+        chatInput.disabled = true;
+        sendButton.disabled = true;
+        locationButton.disabled = true;
+        chatInput.placeholder = "Bấm 'Chat tiếp' để tiếp tục cuộc hội thoại này";
+
+    } catch (e) {
+        console.error("Load shared chat error:", e);
+        loadingMsg.innerHTML = '<div class="message-bubble text-danger">Không thể tải cuộc hội thoại này hoặc link đã hết hạn.</div>';
+    }
+}
+
+function forkChat() {
+    if (!sharedChatData) return;
+
+    // Import messages into current session history
+    chatHistory = [...sharedChatData.messages];
+    saveHistory();
+
+    // Enable UI
+    chatInput.disabled = false;
+    sendButton.disabled = false;
+    locationButton.disabled = false;
+    chatInput.placeholder = "Nhập tin nhắn...";
+
+    // Hide Banner
+    const banner = document.getElementById('shared-mode-banner');
+    banner.style.setProperty('display', 'none', 'important');
+
+    const originalName = sharedChatData.user_info ? sharedChatData.user_info.name : 'một người dùng';
+    appendMessage('ai', `<b>✅ Đã nạp thành công!</b> Bạn có thể tiếp tục cuộc hội thoại của <b>${originalName}</b> từ đây. 🚀`);
+
+    // Clean URL
+    const url = new URL(window.location);
+    url.searchParams.delete('share');
+    window.history.replaceState({}, '', url);
 }
 
 function safeEncode(str) {

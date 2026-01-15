@@ -11,6 +11,9 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 import logging
 from typing import Dict, List, Optional, Any, Tuple
+import firebase_admin
+from firebase_admin import credentials, firestore
+import uuid
 
 # --- CONFIGURATION LOGGING ---
 logging.basicConfig(
@@ -58,6 +61,21 @@ sessions: Dict[str, dict] = {}
 stores_dataframe: pd.DataFrame = pd.DataFrame()
 products_dataframe: pd.DataFrame = pd.DataFrame()
 unique_categories: List[str] = []
+
+# --- FIREBASE INITIALIZATION ---
+fb_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
+if fb_path and os.path.exists(fb_path):
+    try:
+        cred = credentials.Certificate(fb_path)
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        logger.info("✅ Firebase initialized successfully.")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Firebase: {e}")
+        db = None
+else:
+    logger.warning(f"⚠️ Firebase Key not found at {fb_path}. Sharing feature disabled.")
+    db = None
 
 app = FastAPI()
 
@@ -695,6 +713,57 @@ async def view_product(product_id: str, url: str = None):
             content=f"<h1>Lỗi hiển thị sản phẩm</h1><p>{str(e)}</p>",
             status_code=500
         )
+
+# --- SHARING ROUTES ---
+
+@app.post("/api/share")
+async def share_chat(request: dict):
+    """
+    Save a chat snapshot to Firebase and return a share_id
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Sharing feature unavailable (Firebase not configured)")
+    
+    try:
+        messages = request.get("messages", [])
+        user_info = request.get("user_info", {})
+        
+        if not messages:
+            raise HTTPException(status_code=400, detail="No messages to share")
+            
+        share_id = str(uuid.uuid4())
+        doc_ref = db.collection("shared_chats").document(share_id)
+        doc_ref.set({
+            "share_id": share_id,
+            "messages": messages,
+            "user_info": user_info,
+            "createdAt": firestore.SERVER_TIMESTAMP
+        })
+        
+        return {"share_id": share_id}
+    except Exception as e:
+        logger.error(f"Error sharing chat: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/share/{share_id}")
+async def get_shared_chat(share_id: str):
+    """
+    Retrieve a shared chat snapshot from Firebase
+    """
+    if db is None:
+        raise HTTPException(status_code=503, detail="Sharing feature unavailable (Firebase not configured)")
+        
+    try:
+        doc_ref = db.collection("shared_chats").document(share_id)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Shared chat not found")
+            
+        return doc.to_dict()
+    except Exception as e:
+        logger.error(f"Error retrieving shared chat: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- STATIC FILES ---
 # Static files moved to end to prevent blocking API routes

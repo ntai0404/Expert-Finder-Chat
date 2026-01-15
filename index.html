@@ -43,11 +43,51 @@
 						</h5>
 						<div class="d-flex align-items-center gap-2">
 							<small id="user-display" class="text-muted"></small>
+							<button id="share-btn" class="btn btn-sm btn-outline-primary" title="Chia sẻ đoạn chat">
+								<i class="material-icons" style="font-size: 18px; vertical-align: middle;">share</i>
+							</button>
 							<button id="logout-btn" class="btn btn-sm btn-outline-danger" style="display: none">
 								<i class="material-icons" style="font-size: 18px; vertical-align: middle;">logout</i>
 								Đăng xuất
 							</button>
 						</div>
+					</div>
+
+					<!-- Share Modal (Bootstrap) -->
+					<div class="modal fade" id="shareModal" tabindex="-1" aria-labelledby="shareModalLabel"
+						aria-hidden="true">
+						<div class="modal-dialog modal-dialog-centered">
+							<div class="modal-content">
+								<div class="modal-header">
+									<h5 class="modal-title" id="shareModalLabel">🔗 Chia sẻ đoạn chat</h5>
+									<button type="button" class="btn-close" data-bs-dismiss="modal"
+										aria-label="Close"></button>
+								</div>
+								<div class="modal-body">
+									<p>Mọi người đều có thể xem và tiếp tục đoạn chat này thông qua link dưới đây:</p>
+									<div class="input-group mb-3">
+										<input type="text" id="share-link-input" class="form-control" readonly>
+										<button class="btn btn-outline-primary" type="button" id="copy-share-link">
+											<i class="material-icons"
+												style="font-size: 18px; vertical-align: middle;">content_copy</i>
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Shared Mode Banner (Hidden by default) -->
+					<div id="shared-mode-banner"
+						class="alert alert-info border-0 rounded-0 m-0 d-flex justify-content-between align-items-center"
+						style="display: none !important;">
+						<span id="shared-banner-text"><i class="material-icons"
+								style="vertical-align: middle; font-size: 18px;">info</i> Bạn
+							đang xem đoạn chat được chia sẻ.</span>
+						<button id="fork-chat-btn" class="btn btn-sm btn-primary">
+							<i class="material-icons" style="vertical-align: middle; font-size: 18px;">fork_right</i>
+							Chat tiếp
+						</button>
 					</div>
 
 					<!-- Chat Messages -->
@@ -80,7 +120,7 @@
 	<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 	<!-- Custom JS -->
-	<script src="avatar-display.js?v=13"></script>
+	<script src="avatar-display.js?v=14"></script>
 	<!-- logout.js removed to prevent duplicate    <!-- Main Logic -->
 	<script src="script_app.js?v=1.0"></script>
 	<script>
