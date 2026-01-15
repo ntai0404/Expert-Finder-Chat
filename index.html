@@ -21,8 +21,8 @@
 	<!-- Google Fonts: Inter -->
 	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 	<!-- Custom CSS -->
-	<link rel="stylesheet" href="style.css?v=12" />
-	<link rel="stylesheet" href="custom-header.css?v=12" />
+	<link rel="stylesheet" href="style.css?v=13" />
+	<link rel="stylesheet" href="custom-header.css?v=13" />
 </head>
 
 <body>
@@ -99,15 +99,43 @@
 						<div class="input-group">
 							<input type="text" id="chat-input" class="form-control" placeholder="Nhập tin nhắn..."
 								aria-label="Message" />
-							<button id="location-button" class="btn btn-outline-secondary" type="button"
-								title="Gửi vị trí">
-								<i class="material-icons">my_location</i>
+							<button class="btn btn-outline-secondary" type="button" id="location-btn"
+								title="Cập nhật vị trí">
+								<i class="material-icons" style="font-size: 20px;">my_location</i>
 							</button>
-							<button id="send-button" class="btn btn-primary" type="button">
-								<i class="material-icons">send</i>
+							<button class="btn btn-primary" type="button" id="send-btn">
+								<i class="material-icons" style="font-size: 20px;">send</i>
 							</button>
 						</div>
 					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Modal Nhập Số Điện Thoại (Lead Form) -->
+	<div class="modal fade" id="phoneInputModal" tabindex="-1" aria-labelledby="phoneInputLabel" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="phoneInputLabel">📢 Thông báo từ Shop</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+						onclick="confirmLead('exit')"></button>
+				</div>
+				<div class="modal-body">
+					<p>Shop muốn xin số điện thoại để tiện tư vấn và hỗ trợ bảo hành cho bạn.</p>
+					<p><i>(Bạn có thể bỏ qua nếu không muốn cung cấp)</i></p>
+					<div class="mb-3">
+						<label for="userPhoneInput" class="form-label">Số điện thoại:</label>
+						<input type="tel" class="form-control" id="userPhoneInput" placeholder="Nhập SĐT của bạn...">
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" onclick="confirmLead('exit')">Đóng</button>
+					<button type="button" class="btn btn-outline-secondary" onclick="confirmLead('skip')">Không
+						cần</button>
+					<button type="button" class="btn btn-primary" onclick="confirmLead('submit')">Gửi SĐT & Vào
+						nhóm</button>
 				</div>
 			</div>
 		</div>
@@ -121,9 +149,8 @@
 	<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 	<!-- Custom JS -->
-	<script src="avatar-display.js?v=14"></script>
-	<!-- logout.js removed to prevent duplicate    <!-- Main Logic -->
-	<script src="script_app.js?v=1.0"></script>
+	<script src="avatar-display.js?v=13"></script>
+	<script src="script_app.js?v=13"></script>
 	<script>
 		// DOM READY LOG
 		document.addEventListener("DOMContentLoaded", function () {
