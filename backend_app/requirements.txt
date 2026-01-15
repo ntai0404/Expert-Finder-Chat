@@ -8,5 +8,6 @@ geopy
 python-dotenv
 requests
 httpx
+firebase-admin
 
 
