@@ -74,6 +74,18 @@
                 // Re-attach event listener to the new button
                 const logoutBtn = document.getElementById('logout-btn');
                 const loginBtn = document.getElementById('login-btn');
+                const shareBtn = document.getElementById('share-btn');
+
+                // FIX: Re-attach Share Event (Race Condition Fix)
+                if (shareBtn && window.handleShare) {
+                    shareBtn.addEventListener('click', window.handleShare);
+                } else if (shareBtn) {
+                    // Fallback if handleShare not ready yet (rare)
+                    shareBtn.addEventListener('click', function () {
+                        if (window.handleShare) window.handleShare();
+                        else alert("Đang tải dữ liệu... vui lòng thử lại sau giây lát.");
+                    });
+                }
 
                 if (logoutBtn) {
                     logoutBtn.addEventListener('click', function () {

@@ -1043,6 +1043,8 @@ async function handleShare() {
         shareBtn.disabled = false;
     }
 }
+// Expose for avatar-display.js
+window.handleShare = handleShare;
 
 let sharedChatData = null;
 
