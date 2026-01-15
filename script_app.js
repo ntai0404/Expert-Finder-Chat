@@ -1068,8 +1068,8 @@ let sharedChatData = null;
 async function handleSharedChat(shareId) {
     console.log("🔗 Loading shared chat:", shareId);
 
-    // Show loading state in chat
-    const loadingMsg = appendMessage('ai', '<i>Đang nạp cuộc hội thoại được chia sẻ...</i>');
+    // Show loading state in chat (DO NOT SAVE TO HISTORY)
+    const loadingMsg = renderMessage('ai', '<i>Đang nạp cuộc hội thoại được chia sẻ...</i>', false);
 
     try {
         const response = await fetch(`/api/share/${shareId}`);
@@ -1085,6 +1085,8 @@ async function handleSharedChat(shareId) {
         const messages = data.messages || [];
         messages.forEach(item => {
             if (item.type === 'message') {
+                // FIX: Auto-heal corrupted history (remove saved loading messages)
+                if (item.text.includes('Đang nạp cuộc hội thoại được chia sẻ')) return;
                 renderMessage(item.sender, item.text, false);
             } else if (item.type === 'stores') {
                 renderStoreCards(item.data, false);

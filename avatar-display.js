@@ -152,7 +152,8 @@
 
             if ((!storedUserType || !storedLoginTime) && !isSharedChat) {
                 console.warn("DEBUG: Redirecting to Login...");
-                const loginUrl = window.location.origin + '/login.html?t=' + new Date().getTime();
+                // FIX: Preserve query params when redirecting to login
+                const loginUrl = window.location.origin + '/login.html' + window.location.search;
                 window.location.href = loginUrl;
                 return false;
             }
