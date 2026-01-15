@@ -665,6 +665,17 @@ async def zalo_callback(code: str = None, state: str = None, error: str = None, 
             
             redirect_url = f"{REDIRECT_FRONTEND_PATH}?session_id={session_id}&user_type=zalo&user_name={encoded_name}&user_picture={encoded_pic}&login_time={datetime.now().isoformat()}"
             
+            # Extract Share ID from State if present (format: state_random|share_id)
+            if state and '|' in state:
+                try:
+                    parts = state.split('|')
+                    if len(parts) >= 2:
+                        share_id = parts[1]
+                        logger.info(f"Preserving Share ID from State: {share_id}")
+                        redirect_url += f"&share={share_id}"
+                except Exception as e:
+                    logger.warning(f"Failed to extract share id from state: {e}")
+            
             return HTMLResponse(f"""
                 <html><body>
                     <h2 style="text-align: center; margin-top: 50px;">Đăng nhập thành công! Đang chuyển hướng...</h2>

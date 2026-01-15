@@ -15,7 +15,7 @@
             const userPicture = localStorage.getItem('user_picture');
 
             const chatHeader = document.querySelector('.p-3.border-bottom.bg-light');
-            if (chatHeader && userType) {
+            if (chatHeader) {
                 let userInfoHtml;
 
                 if (userType === 'zalo' && userPicture) {
@@ -32,9 +32,9 @@
                         <small style="color: rgba(255,255,255,0.95); font-weight: 500;">${userName || 'User'}</small>
                     `;
                 } else {
-                    // Guest user
+                    // Guest user (default)
                     userInfoHtml = `
-                        <i class="fas fa-user" style="font-size: 24px; color: rgba(255,255,255,0.8);"></i>
+                        <i class="fas fa-user-circle" style="font-size: 24px; color: rgba(255,255,255,0.8);"></i>
                         <small style="color: rgba(255,255,255,0.95); font-weight: 500;">Khách</small>
                     `;
                 }
@@ -49,7 +49,7 @@
                         </button>
                     `;
                 } else {
-                    // Login button for Guest users
+                    // Login button for Guest users (default)
                     actionBtnHtml = `
                         <button id="login-btn" class="btn btn-sm ms-2" title="Đăng nhập">
                             <i class="fas fa-sign-in-alt"></i>
@@ -115,6 +115,14 @@
         const originalInitializeSession = window.initializeSession;
         window.initializeSession = function () {
             const urlParams = new URLSearchParams(window.location.search);
+
+            // Capture Share ID early
+            const shareIdFromUrl = urlParams.get('share');
+            if (shareIdFromUrl) {
+                localStorage.setItem('pending_share_id', shareIdFromUrl);
+                console.log("DEBUG: Captured Share ID to localStorage:", shareIdFromUrl);
+            }
+
             const sessionId = urlParams.get('session_id');
             const userType = urlParams.get('user_type');
             const userName = urlParams.get('user_name');
@@ -131,9 +139,15 @@
                 }
                 localStorage.setItem('login_time', loginTime || new Date().toISOString());
 
-                // CRITICAL: Clean up URL immediately after restoring session
-                // This prevents session from being restored again on refresh/back button
-                window.history.replaceState({}, document.title, window.location.pathname);
+                // CRITICAL: Clean up URL after restoring session but PRESERVE other params (like share)
+                const cleanParams = new URLSearchParams(window.location.search);
+                const sessionParams = ['session_id', 'user_type', 'user_name', 'user_picture', 'login_time'];
+                sessionParams.forEach(p => cleanParams.delete(p));
+
+                const searchStr = cleanParams.toString();
+                const newUrl = window.location.pathname + (searchStr ? '?' + searchStr : '');
+                window.history.replaceState({}, document.title, newUrl);
+                console.log("DEBUG: Cleaned URL, preserved params:", searchStr);
             }
 
 
@@ -146,26 +160,33 @@
             const storedUserType = localStorage.getItem('user_type');
             const storedLoginTime = localStorage.getItem('login_time');
 
-            // FIX: If accessing Shared Chat, SKIP login redirect
-            const isSharedChat = urlParams.get('share');
-            console.log("DEBUG: Login Check - UserType:", storedUserType, "Shared:", isSharedChat, "Params:", window.location.search);
+            // FIXED: Use either URL param OR fallback to localStorage
+            const isSharedChat = urlParams.get('share') || localStorage.getItem('pending_share_id');
+            console.log("DEBUG: Login Check - UserType:", storedUserType, "Shared:", isSharedChat, "Current URL Search:", window.location.search);
 
             if ((!storedUserType || !storedLoginTime) && !isSharedChat) {
                 console.warn("DEBUG: Redirecting to Login...");
-                // FIX: Preserve query params when redirecting to login
+                // Backup share param to localStorage just in case redirect strips it
+                const shareParam = urlParams.get('share');
+                if (shareParam) localStorage.setItem('pending_share_id', shareParam);
+
                 const loginUrl = window.location.origin + '/login.html' + window.location.search;
                 window.location.href = loginUrl;
                 return false;
             }
 
-            const loginDate = new Date(storedLoginTime);
-            const now = new Date();
-            const hoursDiff = (now - loginDate) / (1000 * 60 * 60);
+            // Session Expiration Check
+            if (storedLoginTime && !isSharedChat) {
+                const loginDate = new Date(storedLoginTime);
+                const now = new Date();
+                const hoursDiff = (now - loginDate) / (1000 * 60 * 60);
 
-            if (hoursDiff >= 24) {
-                localStorage.clear();
-                window.location.href = 'login.html';
-                return false;
+                if (hoursDiff >= 24) {
+                    console.warn("DEBUG: Session expired (>24h). Clearing.");
+                    localStorage.clear();
+                    window.location.href = 'login.html';
+                    return false;
+                }
             }
 
             // Display user info

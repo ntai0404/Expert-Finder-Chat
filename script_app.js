@@ -528,15 +528,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // MODE DECISION: Shared Chat vs Normal Session
+    // Robust Check: URL param > localStorage fallback
+    const shareIdFallback = localStorage.getItem('pending_share_id');
+    if (shareIdFallback && !shareId) {
+        console.log("Restoring missing Share ID from fallback:", shareIdFallback);
+        shareId = shareIdFallback;
+        // Restore URL visually
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set('share', shareId);
+        window.history.replaceState({}, '', newUrl);
+    }
+
     if (shareId) {
-        console.log("🚀 Mode: Shared Chat detected. Skipping local history.");
+        console.log("🚀 Mode: Shared Chat detected. ID:", shareId);
         // Shared Mode: Directly load shared content
-        // Do NOT loadHistory() to avoid conflict
         handleSharedChat(shareId);
 
         // Safety: Remove any indicators
         removeAllLoadingIndicators();
-
     } else {
         console.log("👤 Mode: Normal Session. Loading local history.");
         loadHistory(); // Reload local history

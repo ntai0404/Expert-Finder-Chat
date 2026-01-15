@@ -294,9 +294,14 @@
 		document
 			.getElementById("zaloLoginBtn")
 			.addEventListener("click", async function () {
-				// Save Share Param if present
-				if (window.location.search.includes('share=')) {
-					localStorage.setItem('pending_share_params', window.location.search);
+				// Check for Share Param to combine with State
+				const urlParams = new URLSearchParams(window.location.search);
+				const shareId = urlParams.get('share');
+
+				let finalState = STATE;
+				if (shareId) {
+					console.log("Preserving share ID in Zalo State:", shareId);
+					finalState = `${STATE}|${shareId}`;
 				}
 
 				if (!config.ZALO_APP_ID) {
@@ -311,7 +316,7 @@
 				localStorage.removeItem("session_id");
 
 				// Save state to localStorage for later verification
-				localStorage.setItem("zalo_oauth_state", STATE);
+				localStorage.setItem("zalo_oauth_state", finalState);
 
 				// Generate code_verifier and code_challenge for PKCE
 				const codeVerifier = generateCodeVerifier();
@@ -324,7 +329,7 @@
 				const zaloAuthUrl = `https://oauth.zaloapp.com/v4/permission?app_id=${config.ZALO_APP_ID
 					}&redirect_uri=${encodeURIComponent(
 						config.REDIRECT_URI
-					)}&code_challenge=${codeChallenge}&state=${STATE}`;
+					)}&code_challenge=${codeChallenge}&state=${finalState}`;
 
 				document.getElementById("loading").classList.add("active");
 
@@ -350,6 +355,11 @@
 				localStorage.setItem("login_time", new Date().toISOString());
 
 				// Chuyển đến trang chính (Preserve Params)
+				const urlParams = new URLSearchParams(window.location.search);
+				const shareId = urlParams.get('share');
+				if (shareId) {
+					localStorage.setItem('pending_share_id', shareId);
+				}
 				window.location.href = "index.html" + window.location.search;
 			});
 
