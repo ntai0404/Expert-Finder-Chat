@@ -528,9 +528,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // MODE DECISION: Shared Chat vs Normal Session
-    // Robust Check: URL param > localStorage fallback
-    const shareIdFallback = localStorage.getItem('pending_share_id');
-    if (shareIdFallback && !shareId) {
+    // Robust Check: URL param > sessionStorage fallback (ONLY IF NO LOCAL HISTORY)
+    const storage = getStorage();
+    const savedHistory = storage.getItem(getHistoryKey());
+    const shareIdFallback = sessionStorage.getItem('pending_share_id');
+
+    if (shareIdFallback && !shareId && !savedHistory) {
         console.log("Restoring missing Share ID from fallback:", shareIdFallback);
         shareId = shareIdFallback;
         // Restore URL visually
@@ -1142,7 +1145,8 @@ function forkChat() {
     const originalName = sharedChatData.user_info ? sharedChatData.user_info.name : 'một người dùng';
     appendMessage('ai', `<b>✅ Đã nạp thành công!</b> Bạn có thể tiếp tục cuộc hội thoại của <b>${originalName}</b> từ đây. 🚀`);
 
-    // Clean URL
+    // Clean URL and Session Fallback
+    sessionStorage.removeItem('pending_share_id');
     const url = new URL(window.location);
     url.searchParams.delete('share');
     window.history.replaceState({}, '', url);

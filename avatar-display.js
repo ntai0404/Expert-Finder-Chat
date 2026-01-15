@@ -119,8 +119,8 @@
             // Capture Share ID early
             const shareIdFromUrl = urlParams.get('share');
             if (shareIdFromUrl) {
-                localStorage.setItem('pending_share_id', shareIdFromUrl);
-                console.log("DEBUG: Captured Share ID to localStorage:", shareIdFromUrl);
+                sessionStorage.setItem('pending_share_id', shareIdFromUrl);
+                console.log("DEBUG: Captured Share ID to sessionStorage:", shareIdFromUrl);
             }
 
             const sessionId = urlParams.get('session_id');
@@ -160,15 +160,15 @@
             const storedUserType = localStorage.getItem('user_type');
             const storedLoginTime = localStorage.getItem('login_time');
 
-            // FIXED: Use either URL param OR fallback to localStorage
-            const isSharedChat = urlParams.get('share') || localStorage.getItem('pending_share_id');
+            // FIXED: Use either URL param OR fallback to sessionStorage
+            const isSharedChat = urlParams.get('share') || sessionStorage.getItem('pending_share_id');
             console.log("DEBUG: Login Check - UserType:", storedUserType, "Shared:", isSharedChat, "Current URL Search:", window.location.search);
 
             if ((!storedUserType || !storedLoginTime) && !isSharedChat) {
                 console.warn("DEBUG: Redirecting to Login...");
-                // Backup share param to localStorage just in case redirect strips it
+                // Backup share param to sessionStorage just in case redirect strips it
                 const shareParam = urlParams.get('share');
-                if (shareParam) localStorage.setItem('pending_share_id', shareParam);
+                if (shareParam) sessionStorage.setItem('pending_share_id', shareParam);
 
                 const loginUrl = window.location.origin + '/login.html' + window.location.search;
                 window.location.href = loginUrl;
