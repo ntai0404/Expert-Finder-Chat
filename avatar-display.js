@@ -102,7 +102,8 @@
 
                 if (loginBtn) {
                     loginBtn.addEventListener('click', function () {
-                        if (window.clearHistory) window.clearHistory(); // Clear chat history
+                        // FIX: Do NOT clear history here. Preserve guest chat context when logging in.
+                        // if (window.clearHistory) window.clearHistory(); 
                         const loginUrl = window.location.origin + '/login.html?t=' + new Date().getTime();
                         window.location.href = loginUrl;
                     });
