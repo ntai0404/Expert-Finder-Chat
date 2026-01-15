@@ -145,7 +145,10 @@
             const storedUserType = localStorage.getItem('user_type');
             const storedLoginTime = localStorage.getItem('login_time');
 
-            if (!storedUserType || !storedLoginTime) {
+            // FIX: If accessing Shared Chat, SKIP login redirect
+            const isSharedChat = urlParams.get('share');
+
+            if ((!storedUserType || !storedLoginTime) && !isSharedChat) {
                 const loginUrl = window.location.origin + '/login.html?t=' + new Date().getTime();
                 window.location.href = loginUrl;
                 return false;
