@@ -148,8 +148,10 @@
 
             // FIX: If accessing Shared Chat, SKIP login redirect
             const isSharedChat = urlParams.get('share');
+            console.log("DEBUG: Login Check - UserType:", storedUserType, "Shared:", isSharedChat, "Params:", window.location.search);
 
             if ((!storedUserType || !storedLoginTime) && !isSharedChat) {
+                console.warn("DEBUG: Redirecting to Login...");
                 const loginUrl = window.location.origin + '/login.html?t=' + new Date().getTime();
                 window.location.href = loginUrl;
                 return false;

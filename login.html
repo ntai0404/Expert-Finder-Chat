@@ -294,6 +294,11 @@
 		document
 			.getElementById("zaloLoginBtn")
 			.addEventListener("click", async function () {
+				// Save Share Param if present
+				if (window.location.search.includes('share=')) {
+					localStorage.setItem('pending_share_params', window.location.search);
+				}
+
 				if (!config.ZALO_APP_ID) {
 					await loadConfig();
 					if (!config.ZALO_APP_ID) return;
@@ -344,8 +349,8 @@
 				localStorage.setItem("user_type", "guest");
 				localStorage.setItem("login_time", new Date().toISOString());
 
-				// Chuyển đến trang chính
-				window.location.href = "index.html";
+				// Chuyển đến trang chính (Preserve Params)
+				window.location.href = "index.html" + window.location.search;
 			});
 
 		// Kiểm tra nếu đã đăng nhập
@@ -360,8 +365,8 @@
 				const hoursDiff = (now - loginDate) / (1000 * 60 * 60);
 
 				if (hoursDiff < 24) {
-					// Session còn hạn, redirect về index
-					window.location.href = "index.html";
+					// Session còn hạn, redirect về index (Preserve Params)
+					window.location.href = "index.html" + window.location.search;
 				} else {
 					// Session hết hạn, xóa
 					localStorage.clear();

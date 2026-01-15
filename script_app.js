@@ -508,7 +508,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Process parameters FIRST to determine mode
     const urlParams = new URLSearchParams(window.location.search);
-    const shareId = urlParams.get('share');
+    let shareId = urlParams.get('share');
+
+    // FIX: Check for pending share params (returned from Zalo Login)
+    const pendingShareParams = localStorage.getItem('pending_share_params');
+    if (pendingShareParams && !shareId) {
+        console.log("Found pending share params:", pendingShareParams);
+        const pendingParams = new URLSearchParams(pendingShareParams);
+        const pendingShareId = pendingParams.get('share');
+
+        if (pendingShareId) {
+            shareId = pendingShareId;
+            // Restore URL visually
+            const newUrl = window.location.pathname + pendingShareParams;
+            window.history.replaceState({}, '', newUrl);
+            console.log("Restored Share ID from login flow:", shareId);
+        }
+        localStorage.removeItem('pending_share_params');
+    }
 
     // MODE DECISION: Shared Chat vs Normal Session
     if (shareId) {
