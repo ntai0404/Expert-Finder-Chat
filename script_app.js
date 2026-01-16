@@ -502,7 +502,6 @@ function removeAllLoadingIndicators() {
 }
 
 // --- Initialization & Simple Permission Logic ---
-// --- Initialization & Simple Permission Logic ---
 document.addEventListener('DOMContentLoaded', () => {
     initializeMap();
 
@@ -556,8 +555,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Safety: Remove any indicators
         removeAllLoadingIndicators();
 
-        // Send welcome message (Only in Normal Mode)
-        if (!sessionStorage.getItem('welcomeShown')) {
+        // Send welcome message (Only in Normal Mode and if no existing history)
+        if (chatHistory.length === 0 && !sessionStorage.getItem('welcomeShown')) {
             setTimeout(() => {
                 appendMessage('ai', 'Xin chào! Chào mừng bạn đến với <b>Beenet.vn</b> 🐝✨<br>Hệ thống mua sắm sắm theo vị trí tiện lợi nhất. Mình có thể giúp gì cho bạn hôm nay?');
                 sessionStorage.setItem('welcomeShown', 'true');
@@ -572,6 +571,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, 1500);
                 }
             }, 500);
+        } else {
+            // Already have history or welcome shown, just ensure flag is set
+            sessionStorage.setItem('welcomeShown', 'true');
         }
     }
 
