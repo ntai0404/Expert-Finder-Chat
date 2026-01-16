@@ -1044,7 +1044,8 @@ async function handleShare() {
             user_info: {
                 name: localStorage.getItem('user_name') || "Khách",
                 avatar: localStorage.getItem('user_picture') || ""
-            }
+            },
+            owner_id: localStorage.getItem('session_id')
         };
 
         const response = await fetch('/api/share', {
@@ -1107,12 +1108,30 @@ async function handleSharedChat(shareId) {
             }
         });
 
-        // Show Shared Mode Banner with original user's name
+        // Detect Ownership
+        const currentSessionId = localStorage.getItem('session_id');
+        const isOwner = (data.owner_id && data.owner_id === currentSessionId);
+
+        // Show Shared Mode Banner with original user's info
         const banner = document.getElementById('shared-mode-banner');
         const bannerText = document.getElementById('shared-banner-text');
-        const originalName = data.user_info ? data.user_info.name : 'một người dùng';
+        const forkBtn = document.getElementById('fork-chat-btn');
 
-        bannerText.innerHTML = `<i class="material-icons" style="vertical-align: middle; font-size: 18px;">info</i> Bạn đang xem đoạn chat được chia sẻ từ <b>${originalName}</b>.`;
+        const originalName = data.user_info ? data.user_info.name : 'một người dùng';
+        const originalAvatar = data.user_info ? data.user_info.avatar : '';
+
+        let avatarHtml = originalAvatar
+            ? `<img src="${originalAvatar}" class="sharer-avatar" alt="Avatar">`
+            : `<i class="fas fa-user-circle sharer-avatar" style="font-size: 20px; color: #17a2b8; background: white; border-radius: 50%;"></i>`;
+
+        if (isOwner) {
+            bannerText.innerHTML = `⭐ <b>Đây là đoạn chat bạn đã chia sẻ.</b>`;
+            if (forkBtn) forkBtn.style.display = 'none'; // No need to fork own chat
+        } else {
+            bannerText.innerHTML = `Bạn đang xem đoạn chat được chia sẻ từ ${avatarHtml} <b>${originalName}</b>.`;
+            if (forkBtn) forkBtn.style.display = 'inline-block';
+        }
+
         banner.style.setProperty('display', 'flex', 'important');
 
         // Disable Input until "Fork"
