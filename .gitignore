@@ -1,3 +1,4 @@
+
 # Python
 __pycache__/
 *.pyc
@@ -30,3 +31,5 @@ backend_app/cache/
 test/
 *cache.json
 googlesheet_service_account.json
+firebase-key.json
+ggsheet-key.json
