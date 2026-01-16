@@ -45,14 +45,14 @@
                     // Logout button for Zalo users
                     actionBtnHtml = `
                         <button id="logout-btn" class="btn btn-sm ms-2" title="Đăng xuất">
-                            <i class="fas fa-sign-out-alt"></i>
+                            <i class="fas fa-sign-out-alt"></i> <span class="btn-text">Đăng xuất</span>
                         </button>
                     `;
                 } else {
                     // Login button for Guest users (default)
                     actionBtnHtml = `
                         <button id="login-btn" class="btn btn-sm ms-2" title="Đăng nhập">
-                            <i class="fas fa-sign-in-alt"></i>
+                            <i class="fas fa-sign-in-alt"></i> <span class="btn-text">Đăng nhập</span>
                         </button>
                     `;
                 }
@@ -62,8 +62,8 @@
                     <div class="d-flex justify-content-between align-items-center w-100">
                         <h5 class="m-0"><img src="assets/bot-logo.jpg" alt="Logo" class="bot-logo-img">Beenet.vn</h5>
                         <div class="d-flex align-items-center gap-2">
-                             <button id="share-btn" class="btn btn-sm d-flex align-items-center gap-1" title="Chia sẻ đoạn chat">
-                                <i class="material-icons" style="font-size: 18px;">share</i> Chia sẻ
+                             <button id="share-btn" class="btn btn-sm" title="Chia sẻ đoạn chat">
+                                <i class="material-icons">share</i> <span class="btn-text">Chia sẻ</span>
                             </button>
                             ${userInfoHtml} <!-- Contains Avatar + Name -->
                             ${actionBtnHtml}

@@ -18,44 +18,57 @@
     flex-direction: row !important;
 }
 
-/* Logout Button Styling */
-/* Logout and Login Button Styling */
+/* Logout, Login, and Share Button Styling */
 #logout-btn,
-#login-btn {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-#logout-btn:hover,
-#login-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
-
-/* Share Button Styling (Match Login/Logout) */
+#login-btn,
 #share-btn {
     background: rgba(255, 255, 255, 0.2);
     color: white;
     border: none;
-    padding: 8px 15px;
-    border-radius: 20px;
+    padding: 0 12px;
+    height: 32px;
+    border-radius: 16px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
 }
 
+#logout-btn:hover,
+#login-btn:hover,
 #share-btn:hover {
     background: rgba(255, 255, 255, 0.3);
     color: white;
+}
+
+#logout-btn i,
+#login-btn i,
+#share-btn i,
+#share-btn .material-icons {
+    font-size: 18px !important;
+    line-height: 1;
+}
+
+/* Responsive: Hide text on small screens to save space */
+@media (max-width: 576px) {
+
+    #logout-btn .btn-text,
+    #login-btn .btn-text,
+    #share-btn .btn-text {
+        display: none;
+    }
+
+    #logout-btn,
+    #login-btn,
+    #share-btn {
+        padding: 0;
+        width: 32px;
+        /* Perfect circle for icon-only */
+        border-radius: 50%;
+        gap: 0;
+    }
 }
