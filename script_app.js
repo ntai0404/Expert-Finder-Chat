@@ -1,4 +1,94 @@
-console.log("🚀 script_app.js v3.7 - REMOVE REDUNDANT MSG...");
+console.log("🚀 script_app.js v3.8 - DYNAMIC CSS INJECTION...");
+
+// 0. AGGRESSIVE CSS INJECTION FOR GOOGLE MAPS INFOWINDOW (FIX FOR REMOTE CACHING)
+(function injectStyles() {
+    const styleId = 'google-maps-iw-fix';
+    if (document.getElementById(styleId)) return;
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+        /* Remove whitespace and padding from Google Maps InfoWindow default bubble */
+        .gm-style-iw-c {
+            padding: 0 !important;
+            max-width: none !important;
+            max-height: none !important;
+            border-radius: 12px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+        }
+        .gm-style-iw-d {
+            overflow: hidden !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: none !important;
+            max-height: none !important;
+        }
+        /* Custom content inside the InfoWindow */
+        .iw-content-v27 {
+            padding: 12px !important;
+            margin: 0 !important;
+            width: 300px !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+        .iw-content-v27.is-mobile { width: 250px !important; }
+        .iw-title {
+            font-size: 16px !important;
+            font-weight: 800 !important;
+            color: #1a73e8 !important;
+            margin: 0 0 2px 0 !important;
+            line-height: 1.2 !important;
+            display: block !important;
+        }
+        .iw-address {
+            font-size: 11px !important;
+            color: #666 !important;
+            line-height: 1.3 !important;
+            margin: 0 0 5px 0 !important;
+            display: block !important;
+        }
+        .iw-product {
+            margin-top: 8px !important;
+            border-top: 1px dashed #eee !important;
+            padding-top: 8px !important;
+            display: flex !important;
+            gap: 10px !important;
+            align-items: center !important;
+        }
+        .iw-product-img {
+            width: 50px !important;
+            height: 50px !important;
+            object-fit: cover !important;
+            border-radius: 4px !important;
+            flex-shrink: 0 !important;
+        }
+        .iw-product-info { flex: 1 !important; overflow: hidden !important; }
+        .iw-product-name {
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+        .iw-product-price {
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            color: #e53935 !important;
+        }
+        /* Fix close button position */
+        .gm-ui-hover-effect {
+            top: 2px !important;
+            right: 2px !important;
+            background: rgba(255,255,255,0.9) !important;
+            border-radius: 50% !important;
+        }
+    `;
+    document.head.appendChild(style);
+})();
+
 // DUAL ACTION: Join Group + Chat with Admin/Staff
 // Global function to be accessible by onclick handlers
 function handleDualZaloAction(groupLink, productName, staffZalo) {
