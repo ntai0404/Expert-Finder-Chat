@@ -277,21 +277,24 @@ async def chat_with_ai(request: ChatRequest):
     if search_intent:
         is_location_req = search_intent.get('is_location_request', False)
         is_general_inquiry = search_intent.get('is_general_inquiry', False)
+        is_social = search_intent.get('is_social_or_emotional', False)
     else:
         # Fallback if AI fails
         is_location_req = False
         is_general_inquiry = False
+        is_social = False
     
+    # Handle Social/Emotional (New: high priority)
+    if is_social:
+        # Use AI to generate a natural response to the talk/emotion
+        reply = await get_ai_response(user_message, [], search_intent)
+        return ChatResponse(reply=reply, nearest_stores=[])
+
     # Handle General Inquiry
     if is_general_inquiry:
-        is_greeting = any(k in user_message.lower() for k in GREETING_KEYWORDS)
-        category_sample = ", ".join(unique_categories[:10])
-        
-        if is_greeting:
-            reply = f"Xin chào! Chúc bạn một ngày tốt lành! 😊 Shop em có các ngành hàng: {category_sample}... Bạn muốn tìm gì ạ?"
-        else:
-            reply = f"Dạ shop em có các ngành hàng: {category_sample}... Anh/chị cần tìm sản phẩm nào ạ?"
-        
+        # For general inquiry, we can also use AI to explain, but optionally keep the category pointer
+        reply = await get_ai_response(user_message, [], search_intent)
+        # If it's a greeting, we might append the category list but AI usually does it better if told in prompt.
         return ChatResponse(reply=reply, nearest_stores=[])
     
     # Handle Location Request
@@ -394,7 +397,14 @@ async def chat_with_ai(request: ChatRequest):
                 shops_with_distance.append({'shop': shop, 'distance': dist, 'product_name': product_name})
             
             shops_with_distance.sort(key=lambda x: x['distance'])
-            if not shops_with_distance: raise ValueError("No valid shops")
+            # Filter by 50km
+            shops_with_distance = [s for s in shops_with_distance if s['distance'] <= 50.0]
+
+            if not shops_with_distance:
+                 return ChatResponse(
+                    reply="Em đã tìm thấy sản phẩm anh/chị cần, nhưng thật tiếc là các shop có hàng đều ở xa quá (hơn 50km)!",
+                    nearest_stores=[]
+                 )
             
             # Deduplicate
             seen = set()
@@ -550,8 +560,14 @@ async def build_response_from_products(matched_df, lat, lng, msg, intent, type):
     """Helper to build response when we have a list of matching products"""
     shop_ids = matched_df['ID Shop'].unique()
     filtered_stores = stores_dataframe[stores_dataframe['store_id'].isin([str(s) for s in shop_ids])]
-    nearest_data = find_nearest_stores(lat, lng, filtered_stores)
+    nearest_data = find_nearest_stores(lat, lng, filtered_stores, max_distance_km=50.0)
     
+    if not nearest_data:
+        return ChatResponse(
+            reply="Rất tiếc, em tìm thấy sản phẩm này nhưng hiện tại các cửa hàng có hàng đều ở khá xa vị trí của anh/chị (ngoài bán kính 50km). Anh/chị có muốn em liệt kê các shop ở xa hơn không ạ?",
+            nearest_stores=[]
+        )
+
     resp_list = []
     for store in nearest_data:
         s_prods = matched_df[matched_df['ID Shop'].astype(str) == str(store['store_id'])]
@@ -589,7 +605,14 @@ async def build_category_response(cat_shops, cat_prods_df, lat, lng, msg, intent
     # Only keep shops matching category logic (already done in main flow)
     # But we need to filter PRODUCTS inside those shops
     
-    nearest_data = find_nearest_stores(lat, lng, cat_shops, limit=3)
+    nearest_data = find_nearest_stores(lat, lng, cat_shops, limit=3, max_distance_km=50.0)
+    
+    if not nearest_data:
+        return ChatResponse(
+            reply=f"Dạ, em thấy shop mình có ngành hàng '{cat_shops.iloc[0]['categories']}' nhưng hiện tại chưa có cửa hàng nào ở gần anh/chị (trong vòng 50km) mở bán. Anh/chị cần tìm sản phẩm cụ thể nào khác không ạ?",
+            nearest_stores=[]
+        )
+
     resp_list = []
     
     for store in nearest_data:
@@ -934,11 +957,15 @@ async def get_frontend_config():
     env_redirect = os.environ.get("ZALO_REDIRECT_URI", "")
     final_redirect = env_redirect if env_redirect else f"{base_url}/zalo_callback.html"
 
-    logger.info(f"Config API: AppID={ZALO_APP_ID}, Redirect={final_redirect}")
+    # Google Maps API Key
+    google_maps_key = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+
+    logger.info(f"Config API: AppID={ZALO_APP_ID}, Redirect={final_redirect}, MapsKey={'Set' if google_maps_key else 'Missing'}")
     
     return {
         "zalo_app_id": ZALO_APP_ID,
-        "zalo_redirect_uri": final_redirect
+        "zalo_redirect_uri": final_redirect,
+        "google_maps_api_key": google_maps_key
     }
 
 @app.get("/auth/zalo/callback", response_class=HTMLResponse)

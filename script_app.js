@@ -1,3 +1,4 @@
+console.log("🚀 script_app.js v3.7 - REMOVE REDUNDANT MSG...");
 // DUAL ACTION: Join Group + Chat with Admin/Staff
 // Global function to be accessible by onclick handlers
 function handleDualZaloAction(groupLink, productName, staffZalo) {
@@ -36,8 +37,10 @@ function handleDualZaloAction(groupLink, productName, staffZalo) {
 
 let map;
 let userMarker;
-let storeMarkers = L.featureGroup();
+let storeMarkers = []; // Array of google.maps.Marker
+let storeInfoWindows = []; // FIX 2: Track all InfoWindow instances
 let currentUserLocation = null;
+let googleMapsLoaded = false;
 let chatHistory = []; // Global history array
 window.lastSearchTime = Date.now(); // Global context timer
 window.interestedProducts = JSON.parse(localStorage.getItem('interestedProducts') || '[]'); // Accumulate products user is interested in
@@ -45,24 +48,25 @@ function saveInterestedProducts() {
     localStorage.setItem('interestedProducts', JSON.stringify(window.interestedProducts));
 }
 
-// Icons configuration (Global to avoid re-creation and ensures CDN priority)
-const redIcon = L.icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
+// Helper to load Google Maps script dynamically
+function loadGoogleMaps(apiKey) {
+    if (googleMapsLoaded) return Promise.resolve();
 
-const blueIcon = L.icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+            googleMapsLoaded = true;
+            console.log("📍 Google Maps API Loaded.");
+            resolve();
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
 
 // Configure Markdown renderer safely
 if (typeof marked !== 'undefined') {
@@ -116,75 +120,204 @@ function loadHistory() {
 // Styles moved to style.css for cleaner separation and easier maintenance.
 // const style = document.createElement('style'); ... (removed)
 
-// 3.1. Khởi tạo Bản đồ (Map Initialization)
-function initializeMap() {
-    map = L.map('map-container').setView([10.762622, 106.660172], 13); // Default to a general location in Vietnam (e.g., HCMC)
+// 3.1. Khởi tạo Bản đồ (Map Initialization - Google Maps)
+async function initializeMap() {
+    if (!googleMapsLoaded) {
+        console.warn("Map: Library not loaded yet.");
+        return;
+    }
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+    const mapOptions = {
+        center: { lat: 10.762622, lng: 106.660172 }, // HCMC
+        zoom: 13,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        styles: [
+            {
+                "featureType": "all",
+                "elementType": "labels.text.fill",
+                "stylers": [{ "color": "#7c93a3" }]
+            }
+        ]
+    };
 
-    storeMarkers.addTo(map);
-
-    // Fix for Leaflet images not loading from absolute paths (prevents 404 spinning)
-    L.Icon.Default.imagePath = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/';
+    map = new google.maps.Map(document.getElementById('map-container'), mapOptions);
 }
 
 function updateMap(userLat, userLng, stores) {
+    if (!map || !googleMapsLoaded) return;
+
+    // 1. Handle User Marker
     if (userMarker) {
-        map.removeLayer(userMarker);
+        userMarker.setMap(null);
     }
+
+    const isMobile = window.innerWidth <= 768;
 
     if (userLat && userLng) {
-        userMarker = L.marker([userLat, userLng], { icon: redIcon }).addTo(map)
-            .bindPopup('You are here').openPopup();
-        map.setView([userLat, userLng], 13);
+        const userPos = { lat: parseFloat(userLat), lng: parseFloat(userLng) };
+
+        const userIcon = {
+            url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
+        };
+
+        userMarker = new google.maps.Marker({
+            position: userPos,
+            map: map,
+            title: "Vị trí của bạn",
+            icon: userIcon
+        });
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: "<b>Vị trí của bạn</b>"
+        });
+        userMarker.addListener("click", () => infoWindow.open(map, userMarker));
+
+        map.panTo(userPos);
     }
 
-    // Only update stores if a new list is provided (not null)
+    // 2. Handle Store Markers
     if (stores !== null) {
-        storeMarkers.clearLayers();
+        // Clear old markers and InfoWindows
+        storeMarkers.forEach(m => m.setMap(null));
+        storeMarkers = [];
+        storeInfoWindows = []; // FIX 2: Clear InfoWindow tracking
+
         if (stores.length > 0) {
-            stores.forEach(store => {
+            const bounds = new google.maps.LatLngBounds();
+            if (userLat && userLng) bounds.extend({ lat: parseFloat(userLat), lng: parseFloat(userLng) });
+
+            stores.forEach((store, index) => {
+                const storePos = { lat: parseFloat(store.lat), lng: parseFloat(store.lng) };
+
+                // Get first product if available for the popup
+                const firstProduct = (store.products && store.products.length > 0) ? store.products[0] : null;
+
+                // Premium Zalo Button for InfoWindow
                 const zaloLink = store.zalo_group_link ?
-                    `<br><a href="${store.zalo_group_link}" target="_blank" class="zalo-btn" style="margin-top: 8px;">💬 Tham gia nhóm Zalo</a>` : '';
+                    `<a href="${store.zalo_group_link}" target="_blank" class="zalo-btn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style="flex-shrink:0; margin-right: 6px;"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.59.39 3.09 1.07 4.41L2 22l5.59-1.07C8.91 21.61 10.41 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.47 0-2.84-.4-4.02-1.1l-.29-.17-2.98.57.57-2.98-.17-.29C4.4 14.84 4 13.47 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8z"/></svg>
+                        <span>Tham gia nhóm Zalo</span>
+                    </a>` : '';
 
-                L.marker([store.lat, store.lng], { icon: blueIcon })
-                    .addTo(storeMarkers)
-                    .bindPopup(`<b>${store.name}</b><br>${store.description || ''}${zaloLink}`).openPopup();
+                if (isMobile) {
+                    infoWindowContent = `
+                        <div class="iw-content-v27 is-mobile">
+                            <b class="iw-title">${store.name}</b>
+                            <div class="iw-address">${store.address || ''}</div>
+                            ${zaloLink}
+                        </div>
+                    `;
+                } else {
+                    let productHtml = '';
+                    if (firstProduct) {
+                        productHtml = `
+                            <div class="iw-product">
+                                <img src="${firstProduct.image_url || 'https://via.placeholder.com/60'}" class="iw-product-img">
+                                <div class="iw-product-info">
+                                    <div class="iw-product-name">${firstProduct.name}</div>
+                                    <div class="iw-product-price">${firstProduct.price}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    infoWindowContent = `
+                        <div class="iw-content-v27 is-desktop">
+                            <b class="iw-title">${store.name}</b>
+                            <div class="iw-address">${store.address || ''}</div>
+                            ${productHtml}
+                            ${zaloLink}
+                        </div>
+                    `;
+                }
+
+                const storeIcon = {
+                    url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
+                };
+
+                const marker = new google.maps.Marker({
+                    position: storePos,
+                    map: map,
+                    title: store.name,
+                    icon: storeIcon
+                });
+
+                const infoWindow = new google.maps.InfoWindow({
+                    content: infoWindowContent
+                });
+
+                // FIX 2: Store InfoWindow instance for later control
+                storeInfoWindows.push(infoWindow);
+
+                marker.addListener("click", () => {
+                    // FIX 2: Close all other InfoWindows first
+                    storeInfoWindows.forEach(iw => {
+                        if (iw !== infoWindow) iw.close();
+                    });
+                    // Then open this one
+                    infoWindow.open(map, marker);
+                });
+
+                // TỰ ĐỘNG MỞ InfoWindow cho TẤT CẢ các shop ngay khi có kết quả
+                setTimeout(() => {
+                    infoWindow.open(map, marker);
+                }, 500 + (index * 150)); // Stagger slightly for a smoother cascade effect
+
+                storeMarkers.push(marker);
+                bounds.extend(storePos);
             });
-        }
-    }
 
-    // Fit bounds logic: Use new stores if provided, otherwise simply maintain view or fit to user + existing
-    // Note: If we just updated location, we might want to keep existing markers in view if possible, 
-    // but the original logic was to fit bounds if stores were provided.
-
-    if (stores && stores.length > 0) {
-        if (userLat && userLng) {
-            const bounds = new L.LatLngBounds();
-            bounds.extend([userLat, userLng]);
-            stores.forEach(store => bounds.extend([store.lat, store.lng]));
-            map.fitBounds(bounds, { padding: [50, 50] });
-        } else {
+            // Auto fit bounds
+            map.fitBounds(bounds);
+            // Limit zoom if only 1 marker
+            if (stores.length === 1 && (!userLat || !userLng)) {
+                google.maps.event.addListenerOnce(map, 'bounds_changed', () => {
+                    if (map.getZoom() > 15) map.setZoom(15);
+                });
+            }
         }
     }
 }
+
+/**
+ * Focuses the map on a specific store and opens its info window.
+ * Used when clicking on store cards in the chat.
+ */
+function focusOnStore(lat, lng, name) {
+    if (!map || !googleMapsLoaded) return;
+
+    const pos = { lat: parseFloat(lat), lng: parseFloat(lng) };
+
+    // FIX 2: Close all InfoWindows first to ensure clean focus
+    storeInfoWindows.forEach(iw => iw.close());
+
+    // Smoothly pan to the location
+    map.panTo(pos);
+    map.setZoom(17);
+
+    // Find the marker for this store and trigger a click to show InfoWindow
+    const marker = storeMarkers.find(m => {
+        const mPos = m.getPosition();
+        return Math.abs(mPos.lat() - pos.lat) < 0.0001 && Math.abs(mPos.lng() - pos.lng) < 0.0001;
+    });
+
+    if (marker) {
+        // Trigger click will open only this InfoWindow (others already closed)
+        google.maps.event.trigger(marker, 'click');
+    }
+}
+
+
 
 // --- Geolocation Logic ---
 let isLocating = false;
 
-function getUserLocation() {
+function getUserLocation(isAutoTriggered = false) {
     if (isLocating) {
-        console.log("GPS: Request already in progress, waiting...");
-        return new Promise((resolve) => {
-            const check = setInterval(() => {
-                if (!isLocating) {
-                    clearInterval(check);
-                    resolve(currentUserLocation || null);
-                }
-            }, 500);
-        });
+        console.log("GPS: Request already in progress, returning current state...");
+        return Promise.resolve(currentUserLocation);
     }
 
     return new Promise((resolve) => {
@@ -195,34 +328,105 @@ function getUserLocation() {
         }
 
         isLocating = true;
+        let watchId = null;
+        let bestPosition = null;
+        let hasResolved = false;
 
-        // Browser options: 30s timeout, use 5-min cache if available
-        const options = {
-            enableHighAccuracy: false,
-            timeout: 30000,
-            maximumAge: 300000
+        const stopWatching = () => {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            isLocating = false;
         };
 
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                isLocating = false;
-                currentUserLocation = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
-                console.log("GPS: Success!", currentUserLocation);
+        const currentOptions = {
+            enableHighAccuracy: true,
+            timeout: 8000,
+            maximumAge: 0 // Always check fresh hardware
+        };
+
+        // FINAL RESOLVE: Only called once
+        const finish = (pos) => {
+            if (hasResolved) return;
+            hasResolved = true;
+            stopWatching();
+
+            if (pos) {
+                currentUserLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                 sessionStorage.setItem('last_location', JSON.stringify(currentUserLocation));
+                sessionStorage.setItem('last_location_acc', pos.coords.accuracy.toFixed(0));
                 updateMap(currentUserLocation.lat, currentUserLocation.lng, null);
+                console.log(`GPS: Finalized with Acc: ${pos.coords.accuracy.toFixed(1)}m`);
                 resolve(currentUserLocation);
+            } else {
+                console.warn("GPS: Timeout/No position found.");
+                resolve(null);
+            }
+        };
+
+        // EMERGENCY TIMEOUT: If nothing happens in 4s, just give up
+        const timer = setTimeout(() => {
+            console.log("GPS: Emergency timeout reached.");
+            finish(bestPosition);
+        }, isAutoTriggered ? 2000 : 4000);
+
+        watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const acc = position.coords.accuracy;
+                console.log(`GPS: Reading - Acc: ${acc.toFixed(1)}m`);
+
+                if (!bestPosition || acc < bestPosition.coords.accuracy) {
+                    bestPosition = position;
+                }
+
+                // SPEED OPTIMIZATION:
+                // 1. If we hit high precision (< 35m), finish INSTANTLY.
+                if (acc < 35) {
+                    console.log("GPS: High precision hit! Resolving instantly.");
+                    clearTimeout(timer);
+                    finish(position);
+                    return;
+                }
             },
             (error) => {
-                isLocating = false;
-                console.warn("GPS: Failed with error code:", error.code, error.message);
-                // Return cached location if valid, else null
-                resolve(currentUserLocation || null);
+                console.warn("GPS: Provider error:", error.code);
+                if (error.code === 1) { // Denied
+                    clearTimeout(timer);
+                    finish(null);
+                }
             },
-            options
+            currentOptions
         );
+
+        // EXTRA SPEED: If we haven't hit <35m but have something decent (<150m) after 1.8s, finish.
+        setTimeout(() => {
+            if (!hasResolved && bestPosition && bestPosition.coords.accuracy < 150) {
+                console.log("GPS: Good enough accuracy found, resolving early.");
+                clearTimeout(timer);
+                finish(bestPosition);
+            }
+        }, isAutoTriggered ? 1000 : 1800);
+    });
+}
+
+function getAddressFromLatLng(lat, lng) {
+    if (!googleMapsLoaded) return Promise.resolve(null);
+    const geocoder = new google.maps.Geocoder();
+    const latlng = { lat: parseFloat(lat), lng: parseFloat(lng) };
+    return new Promise((resolve) => {
+        geocoder.geocode({ location: latlng }, (results, status) => {
+            if (status === "OK") {
+                if (results[0]) {
+                    resolve(results[0].formatted_address);
+                } else {
+                    resolve(null);
+                }
+            } else {
+                console.error("Geocoder failed due to: " + status);
+                resolve(null);
+            }
+        });
     });
 }
 
@@ -256,11 +460,12 @@ async function fetchAIResponse(userMessage, userLocation) {
                     name: store.name,
                     lat: store.lat,
                     lng: store.lng,
-                    description: store.address,
-                    distance_km: store.distance_km,  // Add distance
+                    address: store.address, // Fix: Use 'address' for Map InfoWindows
+                    description: store.address, // Maintain 'description' for search list
+                    distance_km: store.distance_km,
                     zalo_group_link: store.zalo_group_link,
                     products: store.products || [],
-                    staff_zalo: store.staff_zalo || '' // Add staff Zalo ID
+                    staff_zalo: store.staff_zalo || ''
                 });
             });
         }
@@ -381,6 +586,10 @@ function renderStoreCards(stores, save = true) {
             if (store.zalo_group_link && finalLink !== '#') {
                 const separator = finalLink.includes('?') ? '&' : '?';
                 finalLink += `${separator}zalo=${encodeURIComponent(store.zalo_group_link)}&product_name=${encodeURIComponent(p.name)}`;
+                // FIX: Add staff_zalo if available
+                if (p.staff_zalo) {
+                    finalLink += `&staff_zalo=${encodeURIComponent(p.staff_zalo)}`;
+                }
             } else if (finalLink !== '#') {
                 const separator = finalLink.includes('?') ? '&' : '?';
                 finalLink += `${separator}product_name=${encodeURIComponent(p.name)}`;
@@ -426,19 +635,8 @@ function renderStoreCards(stores, save = true) {
     }
 }
 
-// Function to focus map on a specific store
-function focusOnStore(lat, lng, name) {
-    if (map) {
-        map.setView([lat, lng], 16); // Zoom in closer
 
-        // Find and open the popup for this store
-        storeMarkers.eachLayer(function (layer) {
-            if (layer.getLatLng().lat === lat && layer.getLatLng().lng === lng) {
-                layer.openPopup();
-            }
-        });
-    }
-}
+
 
 sendButton.addEventListener('click', sendMessage);
 chatInput.addEventListener('keypress', function (e) {
@@ -460,13 +658,30 @@ async function handleLocationCheck(isAutoTriggered = false) {
     locationButton.disabled = true;
 
     try {
-        const location = await getUserLocation();
+        // If manual click, clear current cached location to force a fresh scan
+        if (!isAutoTriggered) {
+            currentUserLocation = null;
+            sessionStorage.removeItem('last_location');
+        }
+
+        const location = await getUserLocation(isAutoTriggered);
 
         if (location) {
+            const acc = parseInt(sessionStorage.getItem('last_location_acc') || '0');
+            // Get detailed address for more friendly response
+            const address = await getAddressFromLatLng(location.lat, location.lng);
+            let addressText = address ? ` tại **${address}**` : '';
+
+            // If accuracy is poor, add a qualifier
+            if (acc > 200) {
+                addressText += " (vị trí tương đối)";
+            }
+
             // Updated logic: ALWAYS silent for auto-trigger (as requested by user)
             // Manual click (!isAutoTriggered) still shows feedback
             if (!isAutoTriggered) {
-                renderMessage('ai', `Tuyệt vời! 🐝 Beenet đã nhận được vị trí của bạn. Hãy nói cho mình biết bạn cần tìm gì nhé!`, true);
+                const prefix = acc <= 200 ? "Tuyệt vời! 🐝" : "Dạ,";
+                renderMessage('ai', `${prefix} Beenet đã nhận được vị trí của bạn${addressText}. Hãy nói cho mình biết bạn cần tìm gì nhé!`, true);
             }
             // Still mark resolved so we don't nag
             sessionStorage.setItem('locationResolved', 'true');
@@ -502,10 +717,28 @@ function removeAllLoadingIndicators() {
 }
 
 // --- Initialization & Simple Permission Logic ---
-document.addEventListener('DOMContentLoaded', () => {
-    initializeMap();
+document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Fetch Config and Load Google Maps
+    try {
+        const configRes = await fetch('/api/config');
+        const config = await configRes.json();
 
-    // Process parameters FIRST to determine mode
+        if (config.google_maps_api_key) {
+            await loadGoogleMaps(config.google_maps_api_key);
+            initializeMap();
+
+            // Try to restore cached location
+            const cachedLocation = sessionStorage.getItem('last_location');
+            if (cachedLocation) {
+                currentUserLocation = JSON.parse(cachedLocation);
+                updateMap(currentUserLocation.lat, currentUserLocation.lng, null);
+            }
+        }
+    } catch (e) {
+        console.error("Initialization error:", e);
+    }
+
+    // 2. Process parameters FIRST to determine mode
     const urlParams = new URLSearchParams(window.location.search);
     let shareId = urlParams.get('share');
 
@@ -577,12 +810,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Try to restore cached location (Common for both)
-    const cachedLocation = sessionStorage.getItem('last_location');
-    if (cachedLocation) {
-        currentUserLocation = JSON.parse(cachedLocation);
-        updateMap(currentUserLocation.lat, currentUserLocation.lng, null);
-    }
+
+
 
     // --- Share Button Logic ---
     const shareBtn = document.getElementById('share-btn');
@@ -720,6 +949,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
 
+                    console.log("DEBUG: finalZalo =", finalZalo, "| Type:", typeof finalZalo);
+
+                    // CRITICAL FIX: Build message HTML FIRST
+                    let buttonsHtml = `<div>Kết nối với shop <b>${shopDisplay}</b>:</div>`;
+
                     if (finalZalo) {
                         // Use Dual Action Button instead of Markdown Link
                         const safeStaff = data.staff_zalo || '';
@@ -728,20 +962,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         const msg = encodeURIComponent(`Chào bạn, tôi quan tâm sản phẩm: ${pName}. Nhờ hỗ trợ!`);
                         const staffLink = safeStaff ? `https://zalo.me/${safeStaff}?text=${msg}` : "";
 
-                        let buttonsHtml = `<div>Kết nối với shop <b>${shopDisplay}</b>:</div>`;
-
                         // Button 1: Chat with Staff (REMOVED per user request)
 
-
-                        // Button 2: Join Group (Secondary)
-                        if (finalZalo) {
-                            buttonsHtml += `<a href="${finalZalo}" target="_blank" style="display: block; text-align: center; margin-top: 5px; padding: 8px 16px; background: #e0e0e0; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;" onclick="trackInterest(event, '${safeEncode(shopDisplay)}', '${safeEncode(finalZalo)}', '${safeEncode(pName)}')">📢 Vào Nhóm Săn Sale</a>`;
-                        }
-
-                        appendMessage('ai', buttonsHtml);
-                    } else {
-                        appendMessage('ai', `Cửa hàng **${shopDisplay}** hiện chưa cập nhật link Zalo. Bạn có muốn nhắn tin hỏi shop không?`);
+                        // Button 2: Join Group
+                        buttonsHtml += `<a href="${finalZalo}" target="_blank" style="display: block; text-align: center; margin-top: 5px; padding: 8px 16px; background: #e0e0e0; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;" onclick="trackInterest(event, '${safeEncode(shopDisplay)}', '${safeEncode(finalZalo)}', '${safeEncode(pName)}')">📢 Vào Nhóm Săn Sale</a>`;
                     }
+
+                    // CRITICAL: appendMessage MUST be OUTSIDE if(finalZalo) to always show message
+                    appendMessage('ai', buttonsHtml);
+
                 } else {
                     console.error("API Error or Empty Data:", data);
                     appendMessage('ai', "Không tìm thấy thông tin shop cho sản phẩm này.");
@@ -760,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.setItem('welcomeShown', 'true');
     }
 
-    console.log("Chat initialized V3.8");
+    console.log("Chat initialized V3.5");
 });
 
 // Reset persistence only on logout if needed (optional, keeping current localStorage behavior)
@@ -900,15 +1129,15 @@ function trackInterest(event, shopNameEncoded, groupLinkEncoded, productNameEnco
         productName
     };
 
-    // CHECK FOR PERSISTED PHONE - To avoid repeating modal on mobile UX
+    // FIX 3: CHECK FOR PERSISTED PHONE - Skip form if already provided
     const storedPhone = localStorage.getItem('user_phone');
-    if (storedPhone && storedPhone !== "None") {
-        console.log("📱 Using stored phone:", storedPhone);
+    if (storedPhone && storedPhone !== "None" && storedPhone !== "null") {
+        console.log("📱 Using stored phone (skipping form):", storedPhone);
         submitLeadPayload(storedPhone);
         return;
     }
 
-    // Show Modal
+    // Show Modal (only if no phone stored)
     const modalEl = document.getElementById('phoneInputModal');
     if (typeof bootstrap !== 'undefined' && modalEl) {
         const modal = new bootstrap.Modal(modalEl);
@@ -958,10 +1187,7 @@ function confirmLead(action) {
 async function submitLeadPayload(phone) {
     if (!pendingLeadData) return;
 
-    const { groupLink } = pendingLeadData;
-
-    // A. Open Group Link (UX Priority - Immediate)
-    window.open(groupLink, '_blank');
+    const { groupLink, shopName, productName } = pendingLeadData;
 
     // B. Send ALL accumulated products as separate rows
     if (window.interestedProducts.length === 0) {
@@ -982,7 +1208,7 @@ async function submitLeadPayload(phone) {
         if (unsentProducts.length === 0) {
             console.log(`ℹ️ All ${window.interestedProducts.length} products already sent previously.`);
         } else {
-            console.log(`� Submitting ${unsentProducts.length} new products to sheet...`);
+            console.log(`📤 Submitting ${unsentProducts.length} new products to sheet...`);
 
             // Send each product as a separate row
             for (const product of unsentProducts) {
@@ -1016,13 +1242,30 @@ async function submitLeadPayload(phone) {
 
         console.log(`✅ Submission process complete. Array preserved (Total: ${window.interestedProducts.length}).`);
 
+        // A. ADD AI MESSAGE WITH ZALO LINK (REMOVED per user request as it is redundant)
+        /*
+        const phoneDisplay = phone && phone !== "None" ? phone : "chưa cung cấp SĐT";
+        const aiMessage = `Tuyệt vời! 🐝✨ Beenet đã ghi nhận bạn quan tâm đến **${productName}** tại **${shopName}**.\n\n` +
+            `📱 SĐT của bạn: **${phoneDisplay}**\n\n` +
+            `🔗 **[Tham gia nhóm Zalo săn sale ngay!](${groupLink})**\n\n` +
+            `_Nhóm sẽ tự động mở trong giây lát..._`;
+
+        renderMessage('ai', aiMessage, true);
+        */
+
+        // B. OPEN ZALO LINK AFTER DELAY (FIX 1: Ensure message is rendered first)
+        setTimeout(() => {
+            window.open(groupLink, '_blank');
+        }, 800); // 800ms delay to ensure message is visible
+
     } catch (e) {
         console.error("Tracking Error:", e);
     }
 
     // Reset
     pendingLeadData = null;
-    document.getElementById('userPhoneInput').value = ''; // Clear input
+    const phoneInput = document.getElementById('userPhoneInput');
+    if (phoneInput) phoneInput.value = ''; // Clear input
 }
 
 // --- Sharing & Forking Functions ---
