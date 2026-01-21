@@ -1,4 +1,4 @@
-console.log("🚀 script_app.js v3.8 - DYNAMIC CSS INJECTION...");
+console.log("🚀 script_app.js v3.9 - ONCE-ONLY LEAD MODAL...");
 
 // 0. AGGRESSIVE CSS INJECTION FOR GOOGLE MAPS INFOWINDOW (FIX FOR REMOTE CACHING)
 (function injectStyles() {
@@ -1219,13 +1219,18 @@ function trackInterest(event, shopNameEncoded, groupLinkEncoded, productNameEnco
         productName
     };
 
-    // FIX 3: CHECK FOR PERSISTED PHONE - Skip form if already provided
+    // FIX 3: CHECK IF MODAL WAS ALREADY SHOWN OR PHONE EXISTS
     const storedPhone = localStorage.getItem('user_phone');
-    if (storedPhone && storedPhone !== "None" && storedPhone !== "null") {
-        console.log("📱 Using stored phone (skipping form):", storedPhone);
-        submitLeadPayload(storedPhone);
+    const modalShown = localStorage.getItem('lead_modal_shown');
+
+    if ((storedPhone && storedPhone !== "None" && storedPhone !== "null") || modalShown === 'true') {
+        console.log("📱 Skipping form (Phone exists or Modal already shown once).");
+        submitLeadPayload(storedPhone || "None");
         return;
     }
+
+    // Mark as shown immediately so even if they refresh or skip, it won't show again
+    localStorage.setItem('lead_modal_shown', 'true');
 
     // Show Modal (only if no phone stored)
     const modalEl = document.getElementById('phoneInputModal');
