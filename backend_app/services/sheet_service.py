@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # Google Sheets Configuration
 # Google Sheets Configuration
 KNOWLEDGE_SPREADSHEET_ID = os.getenv("PRODUCT_SPREADSHEET_ID", "1FOOZFMQtm43NEW_cP94yq81Gx3RK3Hqp3xJDFEwZqKA")
-LEAD_SPREADSHEET_ID = os.getenv("LEAD_SPREADSHEET_ID", "1DpoiGqwW5DysTFtW7OOYYcL7B8n1Zs4GIpNwAVA6Dys")
+LEAD_SPREADSHEET_ID = os.getenv("LEAD_SPREADSHEET_ID", "1N5XoXSnMKLXKtv8b_o-yZjZ9a2XVB2_9T6WRshU0ziE")
 
 # Specific Sheet Names for Expert Finder
 EXPERT_SHEET_NAME = "Experts"
