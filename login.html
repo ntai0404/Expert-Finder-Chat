@@ -242,7 +242,15 @@
 				const data = await res.json();
 				config.ZALO_APP_ID = data.zalo_app_id;
 
-				config.REDIRECT_URI = data.zalo_redirect_uri;
+				// FIX: Dynamic Redirect URI
+				try {
+					const backendUri = new URL(data.zalo_redirect_uri);
+					const currentOrigin = window.location.origin;
+					config.REDIRECT_URI = `${currentOrigin}${backendUri.pathname}`;
+				} catch (e) {
+					console.error("Error parsing redirect URI:", e);
+					config.REDIRECT_URI = data.zalo_redirect_uri;
+				}
 
 				console.log("Config loaded:", config);
 			} catch (error) {
