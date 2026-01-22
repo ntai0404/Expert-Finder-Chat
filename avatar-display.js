@@ -57,10 +57,10 @@
                     `;
                 }
 
-                // IMPORTANT: Put "Beenet.vn" on LEFT, user info and share button on RIGHT
+                // IMPORTANT: Put "Expert Finder" on LEFT, user info and share button on RIGHT
                 chatHeader.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center w-100">
-                        <h5 class="m-0"><img src="assets/bot-logo.jpg" alt="Logo" class="bot-logo-img">Beenet.vn</h5>
+                        <h5 class="m-0"><img src="/assets/logo.png?v=3" alt="Logo" class="bot-logo-img">Expert Finder</h5>
                         <div class="d-flex align-items-center gap-2">
                              <button id="share-btn" class="btn btn-sm" title="Chia sẻ đoạn chat">
                                 <i class="material-icons">share</i> <span class="btn-text">Chia sẻ</span>

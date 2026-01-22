@@ -42,14 +42,14 @@ console.log("🚀 script_app.js v3.9 - ONCE-ONLY LEAD MODAL...");
             line-height: 1.2 !important;
             display: block !important;
         }
-        .iw-address {
+        .iw-expertise {
             font-size: 11px !important;
             color: #666 !important;
             line-height: 1.3 !important;
             margin: 0 0 5px 0 !important;
             display: block !important;
         }
-        .iw-product {
+        .iw-knowledge {
             margin-top: 8px !important;
             border-top: 1px dashed #eee !important;
             padding-top: 8px !important;
@@ -57,15 +57,15 @@ console.log("🚀 script_app.js v3.9 - ONCE-ONLY LEAD MODAL...");
             gap: 10px !important;
             align-items: center !important;
         }
-        .iw-product-img {
+        .iw-expert-avatar {
             width: 50px !important;
             height: 50px !important;
             object-fit: cover !important;
-            border-radius: 4px !important;
+            border-radius: 50% !important;
             flex-shrink: 0 !important;
         }
-        .iw-product-info { flex: 1 !important; overflow: hidden !important; }
-        .iw-product-name {
+        .iw-topic-info { flex: 1 !important; overflow: hidden !important; }
+        .iw-topic-name {
             font-size: 12px !important;
             font-weight: 600 !important;
             color: #333 !important;
@@ -73,10 +73,10 @@ console.log("🚀 script_app.js v3.9 - ONCE-ONLY LEAD MODAL...");
             overflow: hidden !important;
             text-overflow: ellipsis !important;
         }
-        .iw-product-price {
+        .iw-topic-status {
             font-size: 14px !important;
             font-weight: 700 !important;
-            color: #e53935 !important;
+            color: #1a73e8 !important;
         }
         /* Fix close button position */
         .gm-ui-hover-effect {
@@ -99,7 +99,7 @@ function handleDualZaloAction(groupLink, productName, staffZalo) {
     let adminChatLink = "";
 
     if (staffZalo && staffZalo.length > 8) {
-        const msg = encodeURIComponent(`Chào bạn, tôi quan tâm sản phẩm: ${productName}. Nhờ hỗ trợ!`);
+        const msg = encodeURIComponent(`Chào bạn, tôi quan tâm chủ đề tri thức: ${productName}. Nhờ hỗ trợ!`);
         adminChatLink = `https://zalo.me/${staffZalo}?text=${msg}`;
     }
 
@@ -127,15 +127,15 @@ function handleDualZaloAction(groupLink, productName, staffZalo) {
 
 let map;
 let userMarker;
-let storeMarkers = []; // Array of google.maps.Marker
-let storeInfoWindows = []; // FIX 2: Track all InfoWindow instances
+let expertMarkers = []; // Array of google.maps.Marker
+let expertInfoWindows = []; // FIX 2: Track all InfoWindow instances
 let currentUserLocation = null;
 let googleMapsLoaded = false;
 let chatHistory = []; // Global history array
 window.lastSearchTime = Date.now(); // Global context timer
-window.interestedProducts = JSON.parse(localStorage.getItem('interestedProducts') || '[]'); // Accumulate products user is interested in
-function saveInterestedProducts() {
-    localStorage.setItem('interestedProducts', JSON.stringify(window.interestedProducts));
+window.interestedTopics = JSON.parse(localStorage.getItem('interestedTopics') || '[]'); // Accumulate topics user is interested in
+function saveInterestedTopics() {
+    localStorage.setItem('interestedTopics', JSON.stringify(window.interestedTopics));
 }
 
 // Helper to load Google Maps script dynamically
@@ -195,8 +195,8 @@ function loadHistory() {
             chatHistory.forEach(item => {
                 if (item.type === 'message') {
                     renderMessage(item.sender, item.text, false);
-                } else if (item.type === 'stores') {
-                    renderStoreCards(item.data, false);
+                } else if (item.type === 'experts' || item.type === 'stores') {
+                    renderExpertCards(item.data, false);
                 }
             });
         } catch (e) {
@@ -235,7 +235,7 @@ async function initializeMap() {
     map = new google.maps.Map(document.getElementById('map-container'), mapOptions);
 }
 
-function updateMap(userLat, userLng, stores) {
+function updateMap(userLat, userLng, experts) {
     if (!map || !googleMapsLoaded) return;
 
     // 1. Handle User Marker
@@ -267,47 +267,48 @@ function updateMap(userLat, userLng, stores) {
         map.panTo(userPos);
     }
 
-    // 2. Handle Store Markers
-    if (stores !== null) {
+    // 2. Handle Expert Markers
+    if (experts !== null) {
         // Clear old markers and InfoWindows
-        storeMarkers.forEach(m => m.setMap(null));
-        storeMarkers = [];
-        storeInfoWindows = []; // FIX 2: Clear InfoWindow tracking
+        expertMarkers.forEach(m => m.setMap(null));
+        expertMarkers = [];
+        expertInfoWindows.forEach(iw => iw.close());
+        expertInfoWindows = [];
 
-        if (stores.length > 0) {
+        if (experts.length > 0) {
             const bounds = new google.maps.LatLngBounds();
             if (userLat && userLng) bounds.extend({ lat: parseFloat(userLat), lng: parseFloat(userLng) });
 
-            stores.forEach((store, index) => {
-                const storePos = { lat: parseFloat(store.lat), lng: parseFloat(store.lng) };
+            experts.forEach((expert, index) => {
+                const expertPos = { lat: parseFloat(expert.lat), lng: parseFloat(expert.lng) };
 
-                // Get first product if available for the popup
-                const firstProduct = (store.products && store.products.length > 0) ? store.products[0] : null;
+                // Get first topic if available for the popup
+                const firstTopic = (expert.topics && expert.topics.length > 0) ? expert.topics[0] : null;
 
                 // Premium Zalo Button for InfoWindow
-                const zaloLink = store.zalo_group_link ?
-                    `<a href="${store.zalo_group_link}" target="_blank" class="zalo-btn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style="flex-shrink:0; margin-right: 6px;"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.59.39 3.09 1.07 4.41L2 22l5.59-1.07C8.91 21.61 10.41 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.47 0-2.84-.4-4.02-1.1l-.29-.17-2.98.57.57-2.98-.17-.29C4.4 14.84 4 13.47 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8-3.59 8-8 8z"/></svg>
-                        <span>Tham gia nhóm Zalo</span>
+                const zaloLink = expert.zalo_link ?
+                    `<a href="${expert.zalo_link}" target="_blank" class="zalo-btn">
+                        <i class="material-icons" style="font-size:18px; margin-right:6px;">groups</i>
+                        <span>Tham gia cộng đồng</span>
                     </a>` : '';
 
                 if (isMobile) {
                     infoWindowContent = `
                         <div class="iw-content-v27 is-mobile">
-                            <b class="iw-title">${store.name}</b>
-                            <div class="iw-address">${store.address || ''}</div>
+                            <b class="iw-title">${expert.name}</b>
+                            <div class="iw-expertise">${expert.expertise}</div>
                             ${zaloLink}
                         </div>
                     `;
                 } else {
-                    let productHtml = '';
-                    if (firstProduct) {
-                        productHtml = `
-                            <div class="iw-product">
-                                <img src="${firstProduct.image_url || 'https://via.placeholder.com/60'}" class="iw-product-img">
-                                <div class="iw-product-info">
-                                    <div class="iw-product-name">${firstProduct.name}</div>
-                                    <div class="iw-product-price">${firstProduct.price}</div>
+                    let knowledgeHtml = '';
+                    if (firstTopic) {
+                        knowledgeHtml = `
+                            <div class="iw-knowledge">
+                                <img src="${expert.avatar_url || 'assets/expert-default.jpg'}" class="iw-expert-avatar">
+                                <div class="iw-topic-info">
+                                    <div class="iw-topic-name">${firstTopic.name}</div>
+                                    <div class="iw-topic-status">Chủ đề tri thức</div>
                                 </div>
                             </div>
                         `;
@@ -315,23 +316,23 @@ function updateMap(userLat, userLng, stores) {
 
                     infoWindowContent = `
                         <div class="iw-content-v27 is-desktop">
-                            <b class="iw-title">${store.name}</b>
-                            <div class="iw-address">${store.address || ''}</div>
-                            ${productHtml}
+                            <b class="iw-title">${expert.name}</b>
+                            <div class="iw-expertise">${expert.expertise}</div>
+                            ${knowledgeHtml}
                             ${zaloLink}
                         </div>
                     `;
                 }
 
-                const storeIcon = {
+                const expertIcon = {
                     url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
                 };
 
                 const marker = new google.maps.Marker({
-                    position: storePos,
+                    position: expertPos,
                     map: map,
-                    title: store.name,
-                    icon: storeIcon
+                    title: expert.name,
+                    icon: expertIcon
                 });
 
                 const infoWindow = new google.maps.InfoWindow({
@@ -339,30 +340,28 @@ function updateMap(userLat, userLng, stores) {
                 });
 
                 // FIX 2: Store InfoWindow instance for later control
-                storeInfoWindows.push(infoWindow);
+                expertInfoWindows.push(infoWindow);
 
                 marker.addListener("click", () => {
-                    // FIX 2: Close all other InfoWindows first
-                    storeInfoWindows.forEach(iw => {
+                    expertInfoWindows.forEach(iw => {
                         if (iw !== infoWindow) iw.close();
                     });
-                    // Then open this one
                     infoWindow.open(map, marker);
                 });
 
-                // TỰ ĐỘNG MỞ InfoWindow cho TẤT CẢ các shop ngay khi có kết quả
+                // TỰ ĐỘNG MỞ InfoWindow cho TẤT CẢ các chuyên gia ngay khi có kết quả
                 setTimeout(() => {
                     infoWindow.open(map, marker);
-                }, 500 + (index * 150)); // Stagger slightly for a smoother cascade effect
+                }, 500 + (index * 150));
 
-                storeMarkers.push(marker);
-                bounds.extend(storePos);
+                expertMarkers.push(marker);
+                bounds.extend(expertPos);
             });
 
             // Auto fit bounds
             map.fitBounds(bounds);
             // Limit zoom if only 1 marker
-            if (stores.length === 1 && (!userLat || !userLng)) {
+            if (experts.length === 1 && (!userLat || !userLng)) {
                 google.maps.event.addListenerOnce(map, 'bounds_changed', () => {
                     if (map.getZoom() > 15) map.setZoom(15);
                 });
@@ -375,20 +374,20 @@ function updateMap(userLat, userLng, stores) {
  * Focuses the map on a specific store and opens its info window.
  * Used when clicking on store cards in the chat.
  */
-function focusOnStore(lat, lng, name) {
+function focusOnExpert(lat, lng, name) {
     if (!map || !googleMapsLoaded) return;
 
     const pos = { lat: parseFloat(lat), lng: parseFloat(lng) };
 
-    // FIX 2: Close all InfoWindows first to ensure clean focus
-    storeInfoWindows.forEach(iw => iw.close());
+    // Close all expert InfoWindows first to ensure clean focus
+    expertInfoWindows.forEach(iw => iw.close());
 
     // Smoothly pan to the location
     map.panTo(pos);
     map.setZoom(17);
 
-    // Find the marker for this store and trigger a click to show InfoWindow
-    const marker = storeMarkers.find(m => {
+    // Find the marker for this expert and trigger a click to show InfoWindow
+    const marker = expertMarkers.find(m => {
         const mPos = m.getPosition();
         return Math.abs(mPos.lat() - pos.lat) < 0.0001 && Math.abs(mPos.lng() - pos.lng) < 0.0001;
     });
@@ -542,37 +541,39 @@ async function fetchAIResponse(userMessage, userLocation) {
         const data = await response.json();
 
         // Map backend response format to frontend format
-        // Backend returns: { reply: "...", nearest_stores: [ { ... }, ... ] }
-        let stores = [];
-        if (data.nearest_stores && data.nearest_stores.length > 0) {
-            data.nearest_stores.forEach(store => {
-                stores.push({
-                    name: store.name,
-                    lat: store.lat,
-                    lng: store.lng,
-                    address: store.address, // Fix: Use 'address' for Map InfoWindows
-                    description: store.address, // Maintain 'description' for search list
-                    distance_km: store.distance_km,
-                    zalo_group_link: store.zalo_group_link,
-                    products: store.products || [],
-                    staff_zalo: store.staff_zalo || ''
+        // Backend returns: { reply: "...", nearest_experts: [ { ... }, ... ] }
+        let experts = [];
+        if (data.nearest_experts && data.nearest_experts.length > 0) {
+            data.nearest_experts.forEach(exp => {
+                experts.push({
+                    name: exp.name,
+                    lat: exp.lat,
+                    lng: exp.lng,
+                    address: exp.address,
+                    expertise: exp.expertise || '',
+                    distance_km: exp.distance_km,
+                    zalo_link: exp.zalo_link,
+                    notebook_link: exp.notebook_link || '',
+                    avatar_url: exp.avatar_url || '',
+                    topics: exp.topics || []
                 });
             });
         }
 
         return {
-            text: data.reply,
+            reply: data.reply,
             map_data: {
                 user_marker: userLocation,
-                store_markers: stores
+                expert_markers: experts
             },
-            trigger_location: data.trigger_location
+            trigger_location: data.trigger_location,
+            nearest_experts: experts // Direct access
         };
 
     } catch (error) {
         console.error("Error fetching AI response:", error);
         return {
-            text: "Xin lỗi, tôi không thể kết nối với máy chủ lúc này. Vui lòng thử lại sau.",
+            reply: "Xin lỗi, em không thể kết nối với máy chủ lúc này. Vui lòng thử lại sau.",
             map_data: null
         };
     }
@@ -627,12 +628,23 @@ async function sendMessage() {
     }
 
     if (aiResponse && !aiResponse.trigger_location) {
-        appendMessage('ai', aiResponse.text);
+        appendMessage('ai', aiResponse.reply);
     }
 
-    // Render Store Cards
-    if (aiResponse.map_data && aiResponse.map_data.store_markers && aiResponse.map_data.store_markers.length > 0) {
-        renderStoreCards(aiResponse.map_data.store_markers, true);
+    // Render Expert Cards
+    if (aiResponse.nearest_experts && aiResponse.nearest_experts.length > 0) {
+        renderExpertCards(aiResponse.nearest_experts, true);
+    } else {
+        // CRITICAL: Clear map if no experts found
+        const lat = location ? location.lat : null;
+        const lng = location ? location.lng : null;
+
+        // Close all info windows
+        if (typeof expertInfoWindows !== 'undefined') {
+            expertInfoWindows.forEach(iw => iw.close());
+        }
+
+        updateMap(lat, lng, []);
     }
 
     // Auto-trigger location if backend requested it
@@ -648,79 +660,86 @@ function clearHistory() {
     sessionStorage.removeItem(getHistoryKey());
 }
 
-function renderStoreCards(stores, save = true) {
-    const storeListHtml = document.createElement('div');
-    storeListHtml.className = 'store-list';
+function renderExpertCards(experts, save = true) {
+    const expertListHtml = document.createElement('div');
+    expertListHtml.className = 'expert-list';
 
     // UPDATE CONTEXT TIMER
     window.lastSearchTime = Date.now();
 
-    stores.forEach(store => {
+    experts.forEach(expert => {
         const card = document.createElement('div');
-        card.className = 'store-card';
-        card.onclick = () => focusOnStore(store.lat, store.lng, store.name);
+        card.className = 'expert-card';
+        card.onclick = () => focusOnExpert(expert.lat, expert.lng, expert.name);
         card.style.cursor = 'pointer';
 
-        // Use first product name from filtered results
-        const interestName = (store.products && store.products.length > 0) ? store.products[0].name : store.name;
+        // Use first topic name from results
+        const topicDisplay = (expert.topics && expert.topics.length > 0) ? expert.topics[0].name : "Chủ đề tri thức";
 
         card.innerHTML = `
-            <div class="store-name"><i class="material-icons" style="font-size:18px; vertical-align:text-bottom; margin-right:4px;">store_mall_directory</i>${store.name}</div>
-            <div class="store-address"><i class="material-icons" style="font-size:14px; vertical-align:text-bottom; margin-right:4px;">place</i>${store.description || store.address || ''}</div>
-            <div class="store-distance"><i class="material-icons" style="font-size:14px; vertical-align:text-bottom; margin-right:4px;">straighten</i>Cách bạn: ${store.distance_km ? store.distance_km.toFixed(1) : '?'} km</div>
+            <div class="expert-header-row">
+                <img src="${expert.avatar_url || '/assets/logo.png?v=3'}" class="expert-avatar" onerror="this.src='/assets/logo.png?v=3'">
+                <div class="expert-header-info">
+                    <div class="expert-name-header">${expert.name}</div>
+                    <div class="expert-expertise">${expert.expertise || ''}</div>
+                </div>
+            </div>
             
-            ${store.products && store.products.length > 0 ? `
-                <div class="product-list">
-                    ${store.products.map((p, index) => {
+            <div class="expert-distance">Cách đây: ${expert.distance_km ? expert.distance_km.toFixed(1) : '?'} km</div>
+            
+            ${expert.topics && expert.topics.length > 0 ? `
+                <div class="topic-list">
+                    ${expert.topics.map((p, index) => {
             let finalLink = p.link || '#';
-            if (store.zalo_group_link && finalLink !== '#') {
+            if (expert.zalo_link && finalLink !== '#') {
                 const separator = finalLink.includes('?') ? '&' : '?';
-                finalLink += `${separator}zalo=${encodeURIComponent(store.zalo_group_link)}&product_name=${encodeURIComponent(p.name)}`;
-                // FIX: Add staff_zalo if available
-                if (p.staff_zalo) {
-                    finalLink += `&staff_zalo=${encodeURIComponent(p.staff_zalo)}`;
-                }
+                finalLink += `${separator}zalo=${encodeURIComponent(expert.zalo_link)}&topic_name=${encodeURIComponent(p.name)}`;
             } else if (finalLink !== '#') {
                 const separator = finalLink.includes('?') ? '&' : '?';
-                finalLink += `${separator}product_name=${encodeURIComponent(p.name)}`;
+                finalLink += `${separator}topic_name=${encodeURIComponent(p.name)}`;
             }
 
-            const isHidden = index >= 3 ? 'display:none;' : '';
-            const hiddenClass = index >= 3 ? 'hidden-product' : '';
+            const isHidden = index >= 2 ? 'display:none;' : ''; // Show only first 2
+            const hiddenClass = index >= 2 ? 'hidden-topic' : '';
 
             return `
-                        <div class="product-item ${hiddenClass}" style="${isHidden}">
-                            <img src="${p.image_url || 'https://via.placeholder.com/120'}" class="product-img" onerror="this.src='https://via.placeholder.com/120?text=No+Image'">
-                            <div class="product-info">
-                                <div class="product-name" title="${p.name}">${p.name}</div>
-                                <div class="product-price">${p.price}</div>
-                                <a href="${finalLink}" target="_self" class="product-link-btn" onclick="event.stopPropagation()"><i class="material-icons" style="font-size:12px; vertical-align:middle; margin-right:2px;">open_in_new</i> Xem sản phẩm</a>
+                        <div class="topic-item ${hiddenClass}" style="${isHidden}">
+                            <img src="${p.image_url || '/assets/logo.png?v=3'}" class="topic-img" onerror="this.src='/assets/logo.png?v=3'">
+                            <div class="topic-info">
+                                <div class="topic-name-label" title="${p.name}">${p.name}</div>
+                                <div class="topic-status-tag">Tri thức: ${p.status || 'Miễn phí'}</div>
+                                <a href="${finalLink}" target="_self" class="topic-link-btn" onclick="event.stopPropagation()">Xem tri thức</a>
                             </div>
                         </div>`;
         }).join('')}
                     
-                    ${store.products.length > 3 ?
-                    `<button class="see-more-btn" style="width:100%; margin-top:5px; padding:5px; background:#f0f0f0; border:1px solid #ddd; cursor:pointer;" onclick="revealNextBatch(this)">Xem thêm (${store.products.length - 3} sản phẩm)</button>`
+                    ${expert.topics.length > 2 ?
+                    `<button class="see-more-btn" onclick="revealNextBatch(this)">Xem thêm (${expert.topics.length - 2} chủ đề)</button>`
                     : ''}
                 </div>
             ` : ''}
 
-            ${store.zalo_group_link ?
-                `<br><a href="${store.zalo_group_link}" target="_blank" class="zalo-btn" style="display:inline-block; text-decoration:none; text-align:center;" onclick="trackInterest(event, '${safeEncode(store.name)}', '${safeEncode(store.zalo_group_link)}', '${safeEncode(interestName)}')"><i class="material-icons" style="font-size:16px; vertical-align:middle; margin-right:4px;">group_add</i> Tham gia nhóm săn sale</a>`
+            <div class="expert-actions">
+                ${expert.notebook_link ?
+                `<a href="${expert.notebook_link}" target="_blank" class="notebook-btn" onclick="event.stopPropagation()"><i class="material-icons" style="font-size:16px;">library_books</i> Notebook</a>`
                 : ''}
+                ${expert.zalo_link ?
+                `<a href="${expert.zalo_link}" target="_blank" class="zalo-btn-mini" onclick="trackInterest(event, '${safeEncode(expert.name)}', '${safeEncode(expert.zalo_link)}', '${safeEncode(topicDisplay)}')"><i class="material-icons" style="font-size:16px;">groups</i> Zalo Group</a>`
+                : ''}
+            </div>
         `;
-        storeListHtml.appendChild(card);
+        expertListHtml.appendChild(card);
     });
-    chatMessages.appendChild(storeListHtml);
+    chatMessages.appendChild(expertListHtml);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    // Update map markers (Keep user marker if exists)
+    // Update map markers 
     const lat = currentUserLocation ? currentUserLocation.lat : null;
     const lng = currentUserLocation ? currentUserLocation.lng : null;
-    updateMap(lat, lng, stores);
+    updateMap(lat, lng, experts);
 
     if (save) {
-        chatHistory.push({ type: 'stores', data: stores });
+        chatHistory.push({ type: 'experts', data: experts });
         saveHistory();
     }
 }
@@ -881,13 +900,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Send welcome message (Only in Normal Mode and if no existing history)
         if (chatHistory.length === 0 && !sessionStorage.getItem('welcomeShown')) {
             setTimeout(() => {
-                appendMessage('ai', 'Xin chào! Chào mừng bạn đến với <b>Beenet.vn</b> 🐝✨<br>Hệ thống mua sắm sắm theo vị trí tiện lợi nhất. Mình có thể giúp gì cho bạn hôm nay?');
+                appendMessage('ai', 'Xin chào! Chào mừng bạn đến với <b>Expert Finder</b> 🐝✨<br>Nền tảng kết nối tri thức và chuyên gia hàng đầu. Em có thể hỗ trợ anh/chị tìm kiếm cố vấn trong lĩnh vực nào hôm nay ạ?');
                 sessionStorage.setItem('welcomeShown', 'true');
 
                 // Proactively ask for permission
                 if (!currentUserLocation) {
                     setTimeout(() => {
-                        const ask = window.confirm("Beenet.vn muốn biết vị trí của bạn để tìm cửa hàng gần nhất nhé?");
+                        const ask = window.confirm("Expert Finder muốn biết vị trí của bạn để tìm cửa hàng gần nhất nhé?");
                         if (ask) {
                             handleLocationCheck(true);
                         }
@@ -952,24 +971,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const decodedName = decodeURIComponent(productName);
 
         // Store in global for Lead Form to use
-        window.currentProductContext = decodedName;
+        window.currentTopicContext = decodedName;
 
         const userName = localStorage.getItem('user_name') || 'Khách';
 
-        // Restore format: [Hệ thống ghi nhận user **Nguyễn Xuân Tài** đang quan tâm sản phẩm: **Tên SP**]
-        const systemMessage = `[Hệ thống ghi nhận user ** ${userName} ** đang quan tâm sản phẩm: ** ${decodedName} **]`;
+        // Restore format: [Hệ thống ghi nhận user **Nguyễn Xuân Tài** đang quan tâm: **Tên Chủ đề**]
+        const systemMessage = `[Hệ thống ghi nhận user ** ${userName} ** đang quan tâm chủ đề: ** ${decodedName} **]`;
         appendMessage('ai', systemMessage);
 
-        // ADD TO ACCUMULATION ARRAY (when user views product)
-        window.interestedProducts.push({
-            shopName: '', // Will be filled from API call below
+        // ADD TO ACCUMULATION ARRAY (when user views topic)
+        window.interestedTopics.push({
+            expertName: '', // Will be filled from API call below
             groupLink: zaloFromUrl || '',
-            productName: decodedName,
+            topicName: decodedName,
             timestamp: new Date().toLocaleString(),
             sent: false // Tracking flag
         });
-        saveInterestedProducts();
-        console.log(`✅ Added to interest list: ${decodedName} (Total: ${window.interestedProducts.length})`);
+        saveInterestedTopics();
+        console.log(`✅ Added to interest list: ${decodedName} (Total: ${window.interestedTopics.length})`);
 
         // Note: Global function handleDualZaloAction defined at top of file
 
@@ -978,9 +997,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (zaloFromUrl && zaloFromUrl.includes('http') && staffZaloFromUrl && staffZaloFromUrl.length > 5) {
             const safeLink = zaloFromUrl.trim();
             const safeStaffZalo = staffZaloFromUrl.trim();
-            const productContext = decodedName || "Sản phẩm";
+            const productContext = decodedName || "Chủ đề";
 
-            const msg = encodeURIComponent(`Chào bạn, tôi quan tâm sản phẩm: ${productContext}.Nhờ hỗ trợ!`);
+            const msg = encodeURIComponent(`Chào bạn, tôi quan tâm chủ đề tri thức: ${productContext}. Nhờ hỗ trợ!`);
             const staffLink = safeStaffZalo ? `https://zalo.me/${safeStaffZalo}?text=${msg}` : "";
 
             let buttonsHtml = `<div>Bấm vào link bên dưới để kết nối:</div>`;
@@ -990,35 +1009,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Button 2: Join Group (Secondary)
             if (safeLink) {
-                buttonsHtml += `<a href="${safeLink}" target="_blank" style="display: block; text-align: center; margin-top: 5px; padding: 8px 16px; background: #e0e0e0; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;">📢 Vào Nhóm Săn Sale</a>`;
+                buttonsHtml += `<a href="${safeLink}" target="_blank" style="display: block; text-align: center; margin-top: 5px; padding: 8px 16px; background: #e0e0e0; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;">📢 Tham gia Nhóm Tri thức</a>`;
             }
 
             appendMessage('ai', buttonsHtml);
             return;
         }
 
-        const statusMsg = renderMessage('ai', '<div class="typing-indicator">Đang lấy thông tin shop...</div>', false);
+        const statusMsg = renderMessage('ai', '<div class="typing-indicator">Đang kết nối chuyên gia...</div>', false);
         setTimeout(async () => {
             try {
                 // Use standard API path
-                const response = await fetch(`${window.location.origin}/api/product-info/${productId}`);
+                const response = await fetch(`${window.location.origin}/api/expert-info/${productId}`);
                 const data = await response.json();
-                console.log("DEBUG: Product Info Data:", data);
+                console.log("DEBUG: Expert Info Data:", data);
 
                 if (data && !data.error) {
-                    const shopDisplay = data.shop_name || "Cửa hàng";
+                    const expertDisplay = data.expert_name || "Chuyên gia";
 
-                    // UPDATE shop name in accumulated products (match by product name)
-                    if (window.interestedProducts.length > 0) {
-                        // Find the product that matches this API call's product name
-                        const matchingProduct = window.interestedProducts.find(p =>
-                            p.productName === decodedName && p.shopName === ''
+                    // UPDATE expert name in accumulated topics (match by topic name)
+                    if (window.interestedTopics.length > 0) {
+                        // Find the topic that matches this API call's topic name
+                        const matchingTopic = window.interestedTopics.find(p =>
+                            p.topicName === decodedName && p.expertName === ''
                         );
 
-                        if (matchingProduct) {
-                            matchingProduct.shopName = shopDisplay;
-                            saveInterestedProducts();
-                            console.log(`📝 Updated shop name for "${decodedName}": ${shopDisplay}`);
+                        if (matchingTopic) {
+                            matchingTopic.expertName = expertDisplay;
+                            saveInterestedTopics();
+                            console.log(`📝 Updated expert name for "${decodedName}": ${expertDisplay}`);
                         }
                     }
 
@@ -1042,20 +1061,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                     console.log("DEBUG: finalZalo =", finalZalo, "| Type:", typeof finalZalo);
 
                     // CRITICAL FIX: Build message HTML FIRST
-                    let buttonsHtml = `<div>Kết nối với shop <b>${shopDisplay}</b>:</div>`;
+                    let buttonsHtml = `<div>Kết nối với Chuyên gia <b>${expertDisplay}</b>:</div>`;
 
                     if (finalZalo) {
                         // Use Dual Action Button instead of Markdown Link
                         const safeStaff = data.staff_zalo || '';
-                        const pName = data.product_name || data.name || "Sản phẩm";
+                        const pName = data.topic_name || data.name || "Chủ đề";
 
-                        const msg = encodeURIComponent(`Chào bạn, tôi quan tâm sản phẩm: ${pName}. Nhờ hỗ trợ!`);
+                        const msg = encodeURIComponent(`Chào bạn, tôi quan tâm chủ đề tri thức: ${pName}. Nhờ hỗ trợ!`);
                         const staffLink = safeStaff ? `https://zalo.me/${safeStaff}?text=${msg}` : "";
 
                         // Button 1: Chat with Staff (REMOVED per user request)
 
                         // Button 2: Join Group
-                        buttonsHtml += `<a href="${finalZalo}" target="_blank" style="display: block; text-align: center; margin-top: 5px; padding: 8px 16px; background: #e0e0e0; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;" onclick="trackInterest(event, '${safeEncode(shopDisplay)}', '${safeEncode(finalZalo)}', '${safeEncode(pName)}')">📢 Vào Nhóm Săn Sale</a>`;
+                        buttonsHtml += `<a href="${finalZalo}" target="_blank" style="display: block; text-align: center; margin-top: 5px; padding: 8px 16px; background: #e0e0e0; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;" onclick="trackInterest(event, '${safeEncode(expertDisplay)}', '${safeEncode(finalZalo)}', '${safeEncode(decodedName)}')">📢 Tham gia Nhóm Tri thức</a>`;
                     }
 
                     // CRITICAL: appendMessage MUST be OUTSIDE if(finalZalo) to always show message
@@ -1063,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 } else {
                     console.error("API Error or Empty Data:", data);
-                    appendMessage('ai', "Không tìm thấy thông tin shop cho sản phẩm này.");
+                    appendMessage('ai', "Không tìm thấy thông tin chuyên gia cho chủ đề này.");
                 }
             } catch (err) {
                 console.error("Error fetching product info:", err);
@@ -1084,29 +1103,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Reset persistence only on logout if needed (optional, keeping current localStorage behavior)
 window.addEventListener('beforeunload', () => {
-    // We NO LONGER clear interestedProducts here to allow navigation persistence
+    // We NO LONGER clear interestedTopics here to allow navigation persistence
     // Data is stored in localStorage to survive tab closure/crashes
-    console.log("💾 Maximum Persistence active: interestedProducts preserved in localStorage.");
+    console.log("💾 Maximum Persistence active: interestedTopics preserved in localStorage.");
 });
 
 // --- Helper for Product Pagination ---
 function revealNextBatch(btn) {
-    const productList = btn.parentElement;
-    const hiddenItems = productList.querySelectorAll('.product-item.hidden-product');
+    const topicList = btn.parentElement;
+    const hiddenItems = topicList.querySelectorAll('.topic-item.hidden-topic');
 
     // Convert to array to slice
     const itemsToReveal = Array.from(hiddenItems).slice(0, 3);
 
     itemsToReveal.forEach(item => {
         item.style.display = ''; // Reset display to default (block/flex)
-        item.classList.remove('hidden-product');
+        item.classList.remove('hidden-topic');
     });
 
     // Check remaining hidden items
     const remaining = hiddenItems.length - itemsToReveal.length;
 
     if (remaining > 0) {
-        btn.innerText = `Xem thêm (${remaining} sản phẩm)`;
+        btn.innerText = `Xem thêm (${remaining} chủ đề)`;
     } else {
         btn.style.display = 'none'; // Hide button if no more items
     }
@@ -1123,14 +1142,14 @@ function injectPhoneModal() {
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="border-radius: 16px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
                 <div class="modal-header" style="background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); color: white; border-top-left-radius: 16px; border-top-right-radius: 16px;">
-                    <h5 class="modal-title" id="phoneModalLabel">🎁 Tham gia nhóm săn sale</h5>
+                    <h5 class="modal-title" id="phoneModalLabel">🎓 Kết nối Tri thức</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="confirmLead('exit')"></button>
                 </div>
                 <div class="modal-body text-center p-4">
                     <div class="mb-3">
-                        <i class="fas fa-gift fa-3x text-warning mb-3"></i>
-                        <p class="fs-5 fw-bold" style="color: #333;">Để lại SĐT để được Admins hỗ trợ riêng nhé!</p>
-                        <p class="text-muted small">Chúng tôi sẽ add bạn vào nhóm Zalo VIP & Gửi mã giảm giá.</p>
+                        <i class="fas fa-graduation-cap fa-3x text-warning mb-3"></i>
+                        <p class="fs-5 fw-bold" style="color: #333;">Để lại SĐT để được Chuyên gia hỗ trợ tốt nhất nhé!</p>
+                        <p class="text-muted small">Chúng tôi sẽ kết nối bạn vào nhóm Zalo chuyên môn & Gửi tài liệu.</p>
                     </div>
                     <div class="form-floating mb-3">
                         <input type="tel" class="form-control" id="userPhoneInput" placeholder="Số điện thoại của bạn" style="border-radius: 10px;">
@@ -1145,7 +1164,7 @@ function injectPhoneModal() {
                         ⏩ Không cần
                     </button>
                     <button type="button" class="btn btn-primary px-4 fw-bold" style="border-radius: 20px; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); border: none;" onclick="confirmLead('submit')">
-                        Xác nhận & Vào nhóm 🚀
+                        Xác nhận & Kết nối 🚀
                     </button>
                 </div>
             </div>
@@ -1161,62 +1180,62 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // 2. Main Entry Point: Triggered by Button Click
-function trackInterest(event, shopNameEncoded, groupLinkEncoded, productNameEncoded) {
+function trackInterest(event, expertNameEncoded, groupLinkEncoded, topicNameEncoded) {
     if (event) event.preventDefault(); // Stop immediate navigation
 
     // Decode Data
-    const shopName = decodeURIComponent(shopNameEncoded);
+    const expertName = decodeURIComponent(expertNameEncoded);
     const groupLink = decodeURIComponent(groupLinkEncoded);
-    let productName = decodeURIComponent(productNameEncoded);
+    let topicName = decodeURIComponent(topicNameEncoded);
 
-    // FIX: If productName is generic "Sản phẩm", try to find real name from array
-    if (productName === "Sản phẩm" || productName === shopName) {
+    // FIX: If topicName is generic "Chủ đề", try to find real name from array
+    if (topicName === "Chủ đề" || topicName === expertName) {
         // Search from newest to oldest, prioritizing NOT SENT items
-        const candidate = [...window.interestedProducts].reverse().find(p =>
-            p.shopName === shopName && !p.sent
-        ) || [...window.interestedProducts].reverse().find(p => p.shopName === shopName);
+        const candidate = [...window.interestedTopics].reverse().find(p =>
+            p.expertName === expertName && !p.sent
+        ) || [...window.interestedTopics].reverse().find(p => p.expertName === expertName);
 
-        if (candidate && candidate.productName !== "Sản phẩm") {
-            productName = candidate.productName;
-            console.log(`🔄 Resolved "${shopName}" -> "${productName}" (Recent Priority)`);
+        if (candidate && candidate.topicName !== "Chủ đề") {
+            topicName = candidate.topicName;
+            console.log(`🔄 Resolved "${expertName}" -> "${topicName}" (Recent Priority)`);
         }
     }
 
-    // ADD TO ACCUMULATION (for direct "Join Group" clicks without viewing product detail)
+    // ADD TO ACCUMULATION (for direct "Join Group" clicks without viewing topic detail)
     // Check if already exists
-    const existingIndex = window.interestedProducts.findIndex(p =>
-        p.productName === productName
+    const existingIndex = window.interestedTopics.findIndex(p =>
+        p.topicName === topicName
     );
 
     if (existingIndex === -1) {
-        // New product
-        window.interestedProducts.push({
-            shopName,
+        // New topic
+        window.interestedTopics.push({
+            expertName,
             groupLink,
-            productName,
+            topicName,
             timestamp: new Date().toLocaleString(),
             sent: false // Tracking flag
         });
-        saveInterestedProducts();
-        console.log(`✅ Added to interest list: ${productName} (Total: ${window.interestedProducts.length})`);
+        saveInterestedTopics();
+        console.log(`✅ Added to interest list: ${topicName} (Total: ${window.interestedTopics.length})`);
     } else {
-        const product = window.interestedProducts[existingIndex];
-        if (product.sent) {
+        const topic = window.interestedTopics[existingIndex];
+        if (topic.sent) {
             // User wants to interest again - Re-activate!
-            product.sent = false;
-            product.timestamp = new Date().toLocaleString();
-            saveInterestedProducts();
-            console.log(`🔄 Re-activated interest for: ${productName}`);
+            topic.sent = false;
+            topic.timestamp = new Date().toLocaleString();
+            saveInterestedTopics();
+            console.log(`🔄 Re-activated interest for: ${topicName}`);
         } else {
-            console.log(`⚠️ Product already in queue: ${productName}`);
+            console.log(`⚠️ Topic already in queue: ${topicName}`);
         }
     }
 
     // Save to global for Modal callback
     pendingLeadData = {
-        shopName,
+        expertName,
         groupLink,
-        productName
+        topicName
     };
 
     // FIX 3: CHECK IF MODAL WAS ALREADY SHOWN OR PHONE EXISTS
@@ -1282,42 +1301,42 @@ function confirmLead(action) {
 async function submitLeadPayload(phone) {
     if (!pendingLeadData) return;
 
-    const { groupLink, shopName, productName } = pendingLeadData;
+    const { groupLink, expertName, topicName } = pendingLeadData;
 
-    // B. Send ALL accumulated products as separate rows
-    if (window.interestedProducts.length === 0) {
-        console.warn("⚠️ No products in interest list!");
+    // B. Send ALL accumulated topics as separate rows
+    if (window.interestedTopics.length === 0) {
+        console.warn("⚠️ No topics in interest list!");
         return;
     }
 
     try {
-        // Collect Context (shared for all products)
+        // Collect Context (shared for all topics)
         const contextMsgs = chatHistory.filter(item => {
             return item.sender === 'user' || item.type === 'trigger';
         }).slice(-10); // Increase to 10 for better context
         const contextStr = contextMsgs.map(m => m.text).join(" - ");
 
-        // Only send products that haven't been submitted yet
-        const unsentProducts = window.interestedProducts.filter(p => !p.sent);
+        // Only send topics that haven't been submitted yet
+        const unsentTopics = window.interestedTopics.filter(p => !p.sent);
 
-        if (unsentProducts.length === 0) {
-            console.log(`ℹ️ All ${window.interestedProducts.length} products already sent previously.`);
+        if (unsentTopics.length === 0) {
+            console.log(`ℹ️ All ${window.interestedTopics.length} topics already sent previously.`);
         } else {
-            console.log(`📤 Submitting ${unsentProducts.length} new products to sheet...`);
+            console.log(`📤 Submitting ${unsentTopics.length} new topics to sheet...`);
 
-            // Send each product as a separate row
-            for (const product of unsentProducts) {
+            // Send each topic as a separate row
+            for (const topic of unsentTopics) {
                 const payload = {
                     user_name: localStorage.getItem('user_name') || "Khách",
                     user_id: localStorage.getItem('session_id') || "guest",
-                    product_name: product.productName,
-                    shop_name: product.shopName,
-                    chat_context: contextStr || "User clicked Interest",
+                    topic_name: topic.topicName,
+                    expert_name: topic.expertName,
+                    chat_context: contextStr || "Người dùng quan tâm chuyên môn",
                     phone: phone, // Actual Phone or "None"
                     zalo_contact: phone, // Backward compatibility
                     avatar_url: localStorage.getItem('user_picture') || "",
-                    zalo_group_link: product.groupLink,
-                    timestamp: product.timestamp
+                    zalo_group_link: topic.groupLink,
+                    timestamp: topic.timestamp
                 };
 
                 // Send API (fire and forget)
@@ -1326,16 +1345,16 @@ async function submitLeadPayload(phone) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 }).then(() => {
-                    console.log(`✅ Sent: ${product.productName}`);
-                    product.sent = true; // Mark as sent in memory
-                    saveInterestedProducts(); // Persist the 'sent' state
+                    console.log(`✅ Sent: ${topic.topicName}`);
+                    topic.sent = true; // Mark as sent in memory
+                    saveInterestedTopics(); // Persist the 'sent' state
                 }).catch(e => {
-                    console.error(`❌ Failed: ${product.productName}`, e);
+                    console.error(`❌ Failed: ${topic.topicName}`, e);
                 });
             }
         }
 
-        console.log(`✅ Submission process complete. Array preserved (Total: ${window.interestedProducts.length}).`);
+        console.log(`✅ Submission process complete. Array preserved (Total: ${window.interestedTopics.length}).`);
 
         // A. ADD AI MESSAGE WITH ZALO LINK (REMOVED per user request as it is redundant)
         /*

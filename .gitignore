@@ -1,4 +1,3 @@
-
 # Python
 __pycache__/
 *.pyc
@@ -10,7 +9,6 @@ venv/
 .env
 .venv
 pip-log.txt
-pip-delete-this-directory.txt
 
 # IDE
 .vscode/
@@ -20,16 +18,19 @@ pip-delete-this-directory.txt
 .DS_Store
 Thumbs.db
 
-# Project specific debug files
-debug_server.py
-backend_app/debug_server.py
-backend_app/verify_server.py
-backend_app/list_models.py
-backend_app/cache/
+# Project specific logs & cache
+*.log
+*.txt
+geocoding_cache.json
+backend_app/geocoding_cache.json
 
-# Test and Cache
-test/
-*cache.json
+# API Keys & Secrets
+*-key.json
 googlesheet_service_account.json
-firebase-key.json
-ggsheet-key.json
+
+# Tooling/Misc
+temp_reference/
+plan/
+.gemini/
+.agent/
+brain/

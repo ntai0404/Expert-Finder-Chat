@@ -62,18 +62,20 @@ async def get_ai_response(user_msg: str, context: List[Any], intent: Dict[str, A
             return "Hệ thống AI đang bảo trì (Missing Key)."
 
     try:
-        # Construct System Prompt based on context
-        system_prompt = f"""Bạn là trợ lý ảo mua sắm thông minh của hệ thống 'Beenet.vn' - Nền tảng mua sắm theo vị trí hàng đầu.
-        Phong cách: Thân thiện, nhiệt tình, chuyên nghiệp và luôn sử dụng emoji 🐝✨ để tạo cảm giác gần gũi.
-        Nhiệm vụ: Tư vấn sản phẩm, gợi ý cửa hàng gần nhất giúp khách hàng mua sắm tiện lợi nhất.
+        system_prompt = f"""Bạn là trợ lý ảo 'Expert Finder' - Nền tảng kết nối học viên với Chuyên gia & Cố vấn tri thức hàng đầu.
+        Phong cách: Học thuật, chuyên nghiệp, tận tâm và luôn sử dụng emoji 🎓✨.
         
-        Thông tin khách hàng đang xem:
+        Thông tin ngữ cảnh (Chuyên gia & Chủ đề):
         {json.dumps(context, ensure_ascii=False, indent=2)}
 
-        Yêu cầu trả lời:
-        - Ngắn gọn, thân thiện, dùng emoji.
-        - Nếu có sản phẩm phù hợp, hãy mời khách chốt đơn.
-        - Nếu không có, gợi ý sản phẩm tương tự.
+        QUY TẮC PHÅN HỒI (QUAN TRỌNG):
+        1. Nếu ngữ cảnh (context) phía trên là rỗng [], bạn PHẢI trả lời rằng hiện tại chưa tìm thấy chuyên gia nào trong lĩnh vực này. KHÔNG ĐƯỢC bịa đặt tên chuyên gia hoặc chủ đề không có trong ngữ cảnh.
+        2. Ví dụ khi không có kết quả: "Dạ, hiện tại em chưa tìm thấy chuyên gia nào chuyên về lĩnh vực này trong danh sách hiện có ạ. Anh/chị có thể thử tìm kiếm với từ khóa khác nhé! 🎓✨"
+        3. Nếu có chuyên gia: 
+           - Chào hỏi và dẫn dắt tự nhiên.
+           - Nếu > 1 người: "Dạ, em tìm thấy chuyên gia [Tên] và một số chuyên gia khác. Mời anh/chị xem chi tiết ở thẻ bên dưới ạ! 🎓✨"
+           - Nếu = 1 người: "Dạ, em đã tìm thấy chuyên gia [Tên] phù hợp nhất. Anh/chị xem chi tiết ở thẻ bên dưới nhé!"
+        4. Trả lời cực kỳ ngắn gọn (tối đa 2 câu). Tuyệt đối không dùng danh sách Markdown.
         """
 
         response = client.chat.completions.create(
@@ -103,32 +105,34 @@ async def extract_search_intent(query: str, categories: Optional[List[str]] = No
 
     try:
         # Include categories in prompt if available to improve accuracy
-        cat_str = ", ".join(categories) if categories else "Electronics, General"
+        cat_str = ", ".join(categories) if categories else "Giáo dục, Công nghệ 4.0, Kinh doanh & Khởi nghiệp, Ngoại ngữ, Nghệ thuật"
         
         prompt = f"""
-        Phân tích câu tìm kiếm của khách hàng và trích xuất thông tin JSON.
+        Phân tích câu hỏi của người dùng và trích xuất thông tin JSON phục vụ tìm kiếm Chuyên gia & Cố vấn tri thức.
         
         Query: "{query}"
-        Danh mục hợp lệ (ưu tiên khớp chính xác): {cat_str}
+        Lĩnh vực chuyên môn (ưu tiên khớp chính xác): {cat_str}
+        Chủ đề tri thức tiêu biểu (vd): Chatbot, RAG, Solidity, DeFi, SEO, Figma, Penetration Testing.
         
-        Nhiệm vụ:
-        1. Nếu khách tìm Loại sản phẩm chung chung (VD: "mua máy tính", "đồ gia dụng") -> Cố gắng khớp với "Danh mục hợp lệ" ở trên và điền vào trường "category".
-        2. Nếu khách tìm Tên sản phẩm cụ thể (VD: "Macbook Air M1", "Nồi cơm Sharp") -> Điền vào trường "product".
-        
-        Quy tắc Boolean (Quan Trọng):
-        - Nếu tìm thấy "category" HOẶC "product" -> is_general_inquiry = false.
-        - Chỉ khi khách chào hỏi xã giao (hi, hello) hoặc hỏi về chính sách/giờ làm việc -> is_general_inquiry = true.
-        - "is_location_request" = true chỉ khi có từ khóa địa điểm ("ở đâu", "gần đây", "tại Hà Nội").
+        Quy tắc Boolean (RẤT QUAN TRỌNG):
+        - "is_social_or_emotional": true nếu khách CHÀO HỎI (hi, chào), CẢM ƠN, hoặc BÀY TỎ CẢM XÚC (vui, buồn, khen ngợi, phàn nàn).
+        - "is_general_inquiry": true nếu khách hỏi về Expert Finder là gì, bot có thể làm gì, hoặc các câu hỏi không liên quan đến tìm kiếm chuyên môn cụ thể.
+        - "is_location_request": true chỉ khi có từ khóa địa điểm hoặc yêu cầu tìm gần đây ("ở đâu", "gần đây", "quanh đây").
+
+        Quy tắc quan trọng nhất: 
+        - Nếu người dùng hỏi bằng tiếng Việt ("học máy", "chuỗi khối", "tiếp thị"), PHẢI dịch sang TIẾNG ANH ("Machine Learning", "Blockchain", "Marketing").
+        - Nếu lĩnh vực người dùng hỏi KHÔNG có trong danh sách gợi ý (ví dụ: "nông nghiệp", "y tế"), bạn VẪN PHẢI trích xuất từ khóa đó vào "expertise" (dịch sang tiếng Anh). KHÔNG ĐƯỢC để trống nếu người dùng đang có ý định tìm kiếm.
+        - Tuyệt đối giữ nguyên các từ khóa kỹ thuật (Smart Contract, Chatbot, DeFi) và chuyển về dạng từ đơn nếu cần (vd: "chat bot" -> "Chatbot").
 
         Output Format (JSON strict):
         {{
-            "category": "Tên danh mục chính xác",
-            "product": "Tên sản phẩm cụ thể",
-            "keyword": "từ khóa tìm kiếm",
-            "max_price": 0,
+            "expertise": "Lĩnh vực chuyên môn (vd: Agriculture, AI, Blockchain).",
+            "topic": "Chủ đề cụ thể (vd: RAG, Smart Contracts, Chatbot).",
+            "keyword": "từ khóa gốc người dùng nhập",
             "location": "",
             "is_location_request": boolean,
-            "is_general_inquiry": boolean
+            "is_general_inquiry": boolean,
+            "is_social_or_emotional": boolean
         }}
         """
 
@@ -146,18 +150,14 @@ async def extract_search_intent(query: str, categories: Optional[List[str]] = No
         logger.error(f"Intent Extraction Error: {e}")
         return {}
 
-async def smart_product_filter(query: str, products: List[Any]) -> Dict[str, Any]:
+async def expert_logic_template(query: str, experts: List[Any]) -> Dict[str, Any]:
     """
-    Optional: Advanced filtering using LLM.
-    Returns: {"found": bool, "products": list, "reasoning": str}
+    Template for expert matching logic.
     """
-    # For now, simplistic pass-through to ensure speed.
-    # We can add DeepSeek filtering here later if needed.
     return {
         "found": True,
-        "products": products,
-        "reasoning": "Pass-through (Optimized)",
-        "ai_message_template": "Dạ có {{product_name}} tại {{shop_name}} ạ."
+        "experts": experts,
+        "ai_message_template": "Dạ, em tìm thấy chuyên gia {{expert_name}} chuyên về {{expertise}} có thể hỗ trợ anh/chị ạ."
     }
 
 async def standardize_address_ai(ward: str, district: str, city: str) -> str:

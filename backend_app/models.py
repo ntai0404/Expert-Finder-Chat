@@ -6,32 +6,35 @@ class ChatRequest(BaseModel):
     latitude: float
     longitude: float
 
-class ProductInfo(BaseModel):
+class TopicInfo(BaseModel):
     name: str
-    price: str
+    status: str = "Sẵn sàng"
     image_url: str = ""
     link: str = ""
     staff_zalo: Optional[str] = None
 
-class StoreInfo(BaseModel):
+class ExpertInfo(BaseModel):
     name: str
+    expertise: str
     address: str
     lat: float
     lng: float
     distance_km: float
-    zalo_group_link: Optional[str] = None
-    products: List[ProductInfo] = []
+    zalo_link: Optional[str] = None
+    notebook_link: Optional[str] = None
+    avatar_url: Optional[str] = None
+    topics: List[TopicInfo] = []
 
 class ChatResponse(BaseModel):
     reply: str
-    nearest_stores: List[StoreInfo] = []
+    nearest_experts: List[ExpertInfo] = []
     trigger_location: bool = False
 
 class LeadRequest(BaseModel):
     user_name: Optional[str] = "Khách"
     user_id: Optional[str] = None
-    product_name: str
-    shop_name: Optional[str] = None
+    expert_name: Optional[str] = None
+    topic_name: str
     chat_context: str
     zalo_contact: str = "" # Now used for Phone Number
     avatar_url: str = "" # New field

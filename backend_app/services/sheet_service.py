@@ -1,120 +1,102 @@
 import pandas as pd
 import os
+import gspread
 
 # Import from geo_service
 from services.geo_service import geocode_address, build_address, load_cache, apply_jitter
 
 # Import from ai_service
 from services.ai_service import standardize_address_ai
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Google Sheets Configuration
-PRODUCT_SPREADSHEET_ID = "1ekdjU2lJK1MnBzwFr3B8ws2E8GnK1omLJNbIU8puXPI"
-LEAD_SPREADSHEET_ID = "1DpoiGqwW5DysTFtW7OOYYcL7B8n1Zs4GIpNwAVA6Dys" # New Lead Sheet
+# Google Sheets Configuration
+KNOWLEDGE_SPREADSHEET_ID = os.getenv("PRODUCT_SPREADSHEET_ID", "1FOOZFMQtm43NEW_cP94yq81Gx3RK3Hqp3xJDFEwZqKA")
+LEAD_SPREADSHEET_ID = os.getenv("LEAD_SPREADSHEET_ID", "1DpoiGqwW5DysTFtW7OOYYcL7B8n1Zs4GIpNwAVA6Dys")
 
-# Auth for Writing (Private Sheet)
-import gspread
+# Specific Sheet Names for Expert Finder
+EXPERT_SHEET_NAME = "Experts"
+TOPIC_SHEET_NAME = "Topics"
 
+def get_gspread_client():
+    """Shared authentication logic for gspread"""
+    try:
+        key_file_path = os.environ.get("GOOGLE_SHEET_KEY_PATH", "ggsheet-key.json")
+        if os.path.exists(key_file_path):
+            client = gspread.service_account(filename=key_file_path)
+            # logger.info(f"  ✓ Connected using key file: {key_file_path}")
+            return client
+        
+        # Fallback to Env vars
+        private_key = os.environ.get("GOOGLE_PRIVATE_KEY")
+        client_email = os.environ.get("GOOGLE_CLIENT_EMAIL")
+        if private_key and client_email:
+            if "\\n" in private_key:
+                private_key = private_key.replace("\\n", "\n")
+            creds_dict = {
+                "type": "service_account",
+                "project_id": os.environ.get("GOOGLE_PROJECT_ID", ""),
+                "private_key_id": os.environ.get("GOOGLE_PRIVATE_KEY_ID", ""),
+                "private_key": private_key,
+                "client_email": client_email,
+                "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                "client_x509_cert_url": os.environ.get("GOOGLE_CLIENT_CERT_URL", "")
+            }
+            return gspread.service_account_from_dict(creds_dict)
+        return None
+    except Exception as e:
+        print(f"  ✗ Gspread Auth Error: {e}")
+        return None
 
-# All sheet GIDs (product categories)
-SHEET_GIDS = {
-    "815593620": "Balo - Túi xách - Vali",
-    "1986607723": "Bàn , ghế",
-    "871059786": "Bàn chải & Tăm nước",
-    "28491151": "Bàn phím & Chuột",
-    "1752922142": "Bình nước nóng",
-    "2127097084": "Bếp từ , bếp điện",
-    "1436681271": "Chăm sóc nhà cửa",
-    "444196920": "Củ cáp sạc",
-    "667498198": "Dịch vụ , phần mềm online…",
-    "1643965690": "Dụng cụ cầm tay , máy khoan , cắt…",
-    "1258563817": "Dụng cụ nhà bếp",
-    "866725333": "Dụng cụ thể thao",
-    "397341247": "Kính mắt",
-    "281899121": "Loa",
-    "1949182727": "Ly, cốc, bình giữ nhiệt",
-    "478019717": "Máy chiếu",
-    "148397415": "Máy chơi game",
-    "801472824": "Máy hút ẩm , tạo ẩm , phun sương",
-    "1081652131": "Máy lọc không khí",
-    "374890050": "Máy Massage",
-    "2137820275": "Máy tính & Laptop",
-    "824530554": "Máy xay - Máy ép",
-    "1175290915": "Máy ảnh & Camera",
-    "333396090": "Mũ nón",
-    "1877546024": "Mẹ và Bé",
-    "379520387": "Nhà cửa & đời sống",
-    "1688160677": "Nội thất",
-    "835156817": "Phòng ngủ",
-    "805437056": "Phụ kiện khác",
-    "764742527": "Phụ tùng",
-    "1861521418": "Pin,Sạc dự phòng , ắc quy",
-    "1950842517": "Quần áo",
-    "1076652714": "Robot & Máy hút bụi , lau nhà",
-    "1067024040": "Sức khỏe & làm đẹp",
-    "1420423361": "Tai nghe - Micro",
-    "634047726": "Thiết bị - Phụ kiện",
-    "1758622918": "Thiết bị khác",
-    "31506967": "Thiết bị âm thanh",
-    "1673898824": "Thiết bị điện gia dụng",
-    "1477558516": "Thùng các tông",
-    "951706041": "Thời trang",
-    "276874696": "Thực phẩm & Đồ ăn",
-    "1690410600": "Tivi ; máy chiếu",
-    "124067928": "Trang sức",
-    "1722661331": "Trang trí nhà cửa",
-    "1714524348": "Văn phòng phẩm",
-    "654519370": "Vỏ ốp lưng & miếng dán",
-    "301554865": "Vợt muỗi , đèn bắt muỗi",
-    "839522919": "Xốp , bọt , cột khí",
-    "608057419": "Ô tô - Xe máy - Xe đạp",
-    "183193452": "Điều hòa - Quạt",
-    "142217162": "Điện thoại & phụ kiện",
-    "1565181241": "Điện thoại",
-    "111911700": "Đèn & ánh sáng",
-    "156635143": "Đồ Camping , phượt , cắm trại",
-    "671032773": "Đồ chơi - Phụ kiện",
-    "1180757598": "Đồ chơi người lớn , phòng the",
-    "1028300741": "Đồ chơi",
-    "1970437403": "Đồ dùng khác",
-    "1984447125": "Đồ dùng nhà tắm",
-    "1852736408": "Đồ phong thuỷ , tâm linh",
-    "838564855": "Đồng hồ",
-}
-
-def load_all_products():
-    """Load products from all sheets"""
-    print(f"📥 Loading products from {len(SHEET_GIDS)} sheets...")
+def load_expert_data():
+    """Load both Experts and Topics from Google Sheets using gspread for reliability"""
+    logger.info(f"📥 Loading expert data from: {KNOWLEDGE_SPREADSHEET_ID}")
     
-    all_products = []
-    
-    for gid, category_name in SHEET_GIDS.items():
+    try:
+        client = get_gspread_client()
+        if not client:
+            logger.error("  ✗ Failed to initialize Google Sheets client (Auth error)")
+            return pd.DataFrame(), pd.DataFrame()
+
+        sheet = client.open_by_key(KNOWLEDGE_SPREADSHEET_ID)
+        
+        # 1. Load Experts
         try:
-            print(f"  ... Fetching: {category_name} (GID: {gid})")
-            # Anti-bot / Rate-limit fix
-            import time
-            time.sleep(0.5) 
-            
-            csv_url = f"https://docs.google.com/spreadsheets/d/{PRODUCT_SPREADSHEET_ID}/export?format=csv&gid={gid}"
-            df = pd.read_csv(csv_url, storage_options={'User-Agent': 'Mozilla/5.0'})
-            
-            # Add category if not exists
-            if 'Danh mục' not in df.columns:
-                df['Danh mục'] = category_name
-            
-            all_products.append(df)
-            print(f"  ✓ {category_name}: {len(df)} products")
-            
+            experts_ws = sheet.worksheet(EXPERT_SHEET_NAME)
+            experts_data = experts_ws.get_all_records()
+            experts_df = pd.DataFrame(experts_data)
+            logger.info(f"  ✓ Experts: {len(experts_df)} entries (Tab: '{EXPERT_SHEET_NAME}')")
+            logger.info(f"  ✓ Expert Columns: {list(experts_df.columns)}")
+        except gspread.WorksheetNotFound:
+            logger.error(f"  ✗ Tab '{EXPERT_SHEET_NAME}' not found.")
+            experts_df = pd.DataFrame()
         except Exception as e:
-            print(f"  ✗ {category_name}: Error - {e}")
-            pass
-    
-    if all_products:
-        combined_df = pd.concat(all_products, ignore_index=True)
-        print(f"\n✅ Total products loaded: {len(combined_df)}")
-        return combined_df
-    else:
-        print("\n❌ No products loaded")
-        return pd.DataFrame()
+            logger.error(f"  ✗ Error reading Experts: {e}")
+            experts_df = pd.DataFrame()
+
+        # 2. Load Topics
+        try:
+            topics_ws = sheet.worksheet(TOPIC_SHEET_NAME)
+            topics_data = topics_ws.get_all_records()
+            topics_df = pd.DataFrame(topics_data)
+            logger.info(f"  ✓ Topics: {len(topics_df)} entries (Tab: '{TOPIC_SHEET_NAME}')")
+            logger.info(f"  ✓ Topic Columns: {list(topics_df.columns)}")
+        except gspread.WorksheetNotFound:
+            logger.warning(f"  ✗ Tab '{TOPIC_SHEET_NAME}' not found.")
+            topics_df = pd.DataFrame()
+        except Exception as e:
+            logger.error(f"  ✗ Error reading Topics: {e}")
+            topics_df = pd.DataFrame()
+        
+        return experts_df, topics_df
+    except Exception as e:
+        logger.error(f"  ✗ Global Data Load Error: {e}")
+        return pd.DataFrame(), pd.DataFrame()
 
 # Safe Anchors for problematic areas where OSM fails or lands in sea
 SAFE_ANCHORS = {
@@ -124,200 +106,100 @@ SAFE_ANCHORS = {
     "Huyện Thanh Thủy": (21.12, 105.29)
 }
 
-async def aggregate_shops(products_df):
-    """Aggregate products by shop"""
-    print(f"\n🏪 Aggregating products by shop...")
+async def process_experts(experts_df, topics_df):
+    """Integrate topics into experts and standardize location"""
+    logger.info(f"🧠 Processing {len(experts_df)} experts and their topics...")
     
-    # Group by shop ID
-    shop_groups = products_df.groupby('ID Shop')
+    experts_list = []
     
-    shops = []
-    geocode_cache = load_cache()
-    
-    for shop_id, group in shop_groups:
-        # Get shop info from first product
-        first_product = group.iloc[0]
-        shop_name = str(first_product.get('Tên Shop', 'Unknown Shop'))
+    for _, row in experts_df.iterrows():
+        expert_id = str(row.get('expert_id', ''))
+        expert_name = str(row.get('expert_name', 'Unknown Expert'))
         
-        # Extract unique categories
-        categories = group['Danh mục'].dropna().unique().tolist()
+        # Get topics for this expert (Sheet uses standardized 'expert_id')
+        expert_topics_df = topics_df[topics_df['expert_id'].astype(str) == expert_id]
         
-        # Build address from 3 columns
-        ward = first_product.get('Phường/Xã', '')
-        district = first_product.get('Quận/Huyện', '')
-        city = first_product.get('Tỉnh/TP', '')
+        # ALWAYS geocode from address (không lấy lat/lng từ Sheet)
+        address = str(row.get('address', ''))
         
-        address = build_address(ward, district, city)
-        
-        # 1. AI Standardization
-        clean_address = await standardize_address_ai(ward, district, city)
-        
-        # 2. Geocoding (Multi-stage with Safe Anchors & Latitude Lock)
-        # Expected Latitudes: North (Hà Nội, Vĩnh Phúc) ~21, Central (Đà Nẵng) ~16, South (HCM) ~10
-        expected_lat = 21 # Default North
-        city_norm = str(city).lower()
-        if "hồ chí minh" in city_norm or "quận 7" in city_norm or "bình thạnh" in city_norm: expected_lat = 10
-        elif "đà nẵng" in city_norm: expected_lat = 16
-        elif "ninh bình" in city_norm or "nam định" in city_norm: expected_lat = 20
-        elif "bình định" in city_norm or "qui nhơn" in city_norm: expected_lat = 13
-
-        coords = None
-        source_stage = "Unknown"
-        
-        # Priority 1: Check Safe Anchors
-        dist_str = str(district).strip()
-        if dist_str.upper() in [k.upper() for k in SAFE_ANCHORS]:
-            actual_key = next(k for k in SAFE_ANCHORS if k.upper() == dist_str.upper())
-            print(f"      ⚓ [STAGE 1] Using Safe Anchor for '{dist_str}'")
-            coords = SAFE_ANCHORS[actual_key]
-            source_stage = "Safe Anchor"
-            
-        # Priority 2: Standard Geocoding with Province Validation
-        if not coords:
-            variations = [
-                ("Clean AI", clean_address),
-                ("District/City", f"{district}, {city}"),
-                ("City Focus", city)
-            ]
-            for stage_name, addr_var in variations:
-                if not addr_var or len(addr_var.strip()) < 3: continue
-                res = geocode_address(addr_var, geocode_cache, expected_province=city)
-                if res and abs(res[0] - expected_lat) <= 1.5:
-                    print(f"      ✅ [STAGE 2] {stage_name} success for '{addr_var}' -> {res}")
-                    coords = res
-                    source_stage = f"OSM ({stage_name})"
-                    break
-        
-        # Emergency Fallback to province center
-        if not coords:
-            print(f"      🚨 [STAGE 3] Emergency Fallback for '{city}'")
-            coords = geocode_address(city, geocode_cache)
-            source_stage = "Province Center"
-            
-        if coords:
-            lat, lng = apply_jitter(coords[0], coords[1])
-            print(f"      📍 [FINAL] {shop_name} -> [{lat:.5f}, {lng:.5f}] (via {source_stage})")
+        if address and len(address.strip()) > 3:
+            geocode_cache = load_cache()
+            coords = geocode_address(address, geocode_cache)
+            if coords:
+                lat, lng = coords
+                logger.info(f"  ✅ Geocoded '{expert_name}': {address} → ({lat:.5f}, {lng:.5f})")
+            else:
+                logger.warning(f"  ⚠️ Geocode failed for '{expert_name}': {address}, using default TP.HCM")
+                lat, lng = (10.762622, 106.660172)  # Default TP.HCM
         else:
-            print(f"      ❌ [FINAL] {shop_name} -> FAILED ALL STAGES (Defaulting to Hanoi)")
-            lat, lng = (21.0, 105.8) 
+            logger.warning(f"  ⚠️ No address for '{expert_name}', using default TP.HCM")
+            lat, lng = (10.762622, 106.660172)
         
-        # Try to find 'Link Zalo' column with case-insensitive search
-        zalo_link = ''
-        zalo_col_name = None
-        
-        # First find the column name
-        for col in products_df.columns:
-            if str(col).strip().lower() == 'link zalo':
-                zalo_col_name = col
-                break
-        
-        # If column exists, find first non-null value in the group
-        if zalo_col_name:
-            valid_links = group[zalo_col_name].dropna()
-            if not valid_links.empty:
-                zalo_link = str(valid_links.iloc[0]).strip()
-        
-        # Create a searchable string of product names (top 20)
-        product_names = group['Tên sản phẩm'].dropna().unique().tolist()
-        searchable_products = " | ".join(map(str, product_names[:20]))
-        
-        shop = {
-            'store_id': str(shop_id),
-            'store_name': first_product['Tên Shop'],
-            'address': address,
-            'city': city,
-            'district': district,
-            'ward': ward,
-            'shop_type': first_product.get('Loại Shop', ''),
-            'product_count': len(group),
-            'zalo_group_link': zalo_link,
-            'categories': ', '.join(categories),
-            'category': categories[0] if categories else '',  # For compatibility
-            'latitude': lat,
-            'longitude': lng,
-            # CRITICAL FIX: Include product names in product_info for search filtering
-            'product_info': searchable_products if searchable_products else f"{len(group)} sản phẩm",
-            'promotion': ''  # Can be added later
+        expert = {
+            'expert_id': expert_id,
+            'expert_name': expert_name,
+            'avatar_url': row.get('avatar_url', ''),
+            'expertise': row.get('expertise', ''),
+            'categories': row.get('categories', ''),
+            'address': row.get('address', ''),
+            'latitude': float(lat),
+            'longitude': float(lng),
+            'zalo_group_link': row.get('zalo_group_link', ''),
+            'notebook_link': row.get('notebook_link', ''),
+            # Rename columns from standardized Topics sheet for the API/UI
+            'topics_json': expert_topics_df.rename(columns={
+                'topic_name': 'name',
+                'link': 'link',
+                'image_url': 'image_url',
+                'status': 'status'
+            }).to_dict('records')
         }
-        
-        shops.append(shop)
+        experts_list.append(expert)
     
-    shops_df = pd.DataFrame(shops)
-    print(f"✅ Aggregated {len(shops_df)} unique shops")
-    
-    return shops_df
+    return pd.DataFrame(experts_list)
 
-async def load_stores_data():
-    """Main function to load and process store data"""
-    print("\n" + "=" * 80)
-    print("LOADING STORE DATA FROM NEW GOOGLE SHEETS")
-    print("=" * 80)
+async def load_expert_system_data():
+    """Main function to load and process expert data"""
+    logger.info("=" * 60)
+    logger.info("LOADING EXPERT FINDER KNOWLEDGE BASE")
+    logger.info("=" * 60)
     
-    # Load all products
-    products_df = load_all_products()
+    experts_df, topics_df = load_expert_data()
     
-    if products_df.empty:
-        print("❌ No data loaded")
+    if experts_df.empty:
+        logger.error("❌ No expert data loaded from Sheets")
         return pd.DataFrame(), pd.DataFrame(), []
     
-    # Aggregate into shops
-    shops_df = await aggregate_shops(products_df)
+    processed_experts_df = await process_experts(experts_df, topics_df)
     
-    print("\n" + "=" * 80)
-    print(f"✅ DATA LOADED SUCCESSFULLY: {len(shops_df)} shops")
-    print("=" * 80)
+    logger.info("=" * 60)
+    logger.info(f"✅ DATA LOAD SUCCESS: {len(processed_experts_df)} experts")
+    logger.info("=" * 60)
     
-    return shops_df, products_df, list(SHEET_GIDS.values())
+    # Get unique categories for intent extraction
+    categories = []
+    if 'categories' in processed_experts_df.columns:
+        cat_series = processed_experts_df['categories'].dropna().str.split(',')
+        categories = sorted(list(set([item.strip() for sublist in cat_series for item in sublist])))
+
+    return processed_experts_df, topics_df, categories
 
 def save_lead(lead_data: dict) -> bool:
     """
     Save lead data to Google Sheet 'Leads' (Tab: message).
-    Data format: {timestamp, user_name, user_id, product_name, shop_name, context, zalo_contact, status}
+    Data format: {timestamp, user_name, user_id, topic_name, expert_name, context, zalo_contact, status}
     """
     try:
-        # 1. Auth Strategy (File-based)
-        # Prioritize using the JSON file specified in env or default
-        key_file_path = os.environ.get("GOOGLE_SHEET_KEY_PATH", "ggsheet-key.json")
-        
-        if os.path.exists(key_file_path):
-            client = gspread.service_account(filename=key_file_path)
-            print(f"✅ Loaded Credentials from file: {key_file_path}")
-        else:
-            # Fallback to Env Vars (Legacy)
-            private_key = os.environ.get("GOOGLE_PRIVATE_KEY")
-            client_email = os.environ.get("GOOGLE_CLIENT_EMAIL")
-            
-            if private_key and client_email:
-                if "\\n" in private_key:
-                    private_key = private_key.replace("\\n", "\n")
-                    
-                creds_dict = {
-                    "type": "service_account",
-                    "project_id": os.environ.get("GOOGLE_PROJECT_ID", ""),
-                    "private_key_id": os.environ.get("GOOGLE_PRIVATE_KEY_ID", ""),
-                    "private_key": private_key,
-                    "client_email": client_email,
-                    "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                    "client_x509_cert_url": os.environ.get("GOOGLE_CLIENT_CERT_URL", "")
-                }
-                client = gspread.service_account_from_dict(creds_dict)
-                print("⚠️ Loaded Credentials from Environment Variables (Backup)")
-            else:
-                 raise FileNotFoundError(f"Authentication Failed: Key file '{key_file_path}' not found and no Env Vars.")
+        client = get_gspread_client()
+        if not client:
+             raise FileNotFoundError(f"Authentication Failed: No key file and no Env Vars.")
 
         # 2. Open Sheet and Tab
         sheet = client.open_by_key(LEAD_SPREADSHEET_ID)
-        worksheet = sheet.worksheet("message") # USER CONFIRMED TAB NAME IS 'message'
+        worksheet = sheet.worksheet("message")
         
         # 3. Prepare Row
-        # 3. Prepare Row
-        # Columns: A=Time, B=Name, C=ID, D=Product, E=Shop, F=Context, G=Contact(Phone), H=Avatar, I=Status, J=Zalo Link
-        
         phone_val = lead_data.get('phone') or lead_data.get('zalo_contact') or ''
-        # If phone is empty/placeholder, try to get from zalo_contact if it has useful info
         if not phone_val or "Zalo User" in phone_val:
              phone_val = "Chưa cung cấp"
 
@@ -325,32 +207,32 @@ def save_lead(lead_data: dict) -> bool:
             lead_data.get('timestamp', ''),
             lead_data.get('user_name', 'Khách'),
             lead_data.get('user_id', ''),
-            lead_data.get('product_name', ''),
-            lead_data.get('shop_name', ''),
+            lead_data.get('topic_name', ''),
+            lead_data.get('expert_name', ''),
             lead_data.get('chat_context', ''),
-            phone_val,                             # Column G: Zalo Contact / Phone
-            lead_data.get('avatar_url', ''),       # Column H: Zalo Image
-            lead_data.get('status', 'New'),        # Column I: Status
-            lead_data.get('zalo_group_link', '')   # Column J: Zalo Link
+            phone_val,
+            lead_data.get('avatar_url', ''),
+            lead_data.get('status', 'New'),
+            lead_data.get('zalo_group_link', '')
         ]
         
         # 4. Append
         worksheet.append_row(row)
-        print(f"✅ Lead saved: {lead_data.get('user_name')} - {phone_val}")
+        logger.info(f"✅ Lead saved: {lead_data.get('user_name')} - {phone_val}")
         return True
         
     except Exception as e:
         import traceback
-        print(f"❌ Error saving lead: {e}")
+        logger.error(f"❌ Error saving lead: {e}")
         # traceback.print_exc() 
         return False
 
 if __name__ == '__main__':
     # Test loading
-    store_df = load_stores_data()
-    if not store_df.empty:
+    experts_df, topics_df = load_expert_data()
+    if not experts_df.empty:
         print("\nSample data:")
-        print(store_df.head())
-        print(f"\nColumns: {list(store_df.columns)}")
+        print(experts_df.head())
+        print(f"\nColumns: {list(experts_df.columns)}")
 
 save_lead_to_sheet = save_lead

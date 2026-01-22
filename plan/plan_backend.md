@@ -1,143 +1,72 @@
-Kế Hoạch Triển Khai Backend (Python FastAPI)
+# Kế Hoạch Triển Khai Backend (Expert Finder Backend)
 
-1. Tổng quan Công nghệ
+## 1. Công nghệ sử dụng
 
-Framework: FastAPI (Hiệu năng cao, hỗ trợ Async, tự động tạo Docs).
+- **Framework**: FastAPI (Async support cho AI và Database calls).
+- **AI Engine**: DeepSeek V3 (Phân tích intent và sinh văn bản tư vấn).
+- **Data Source**: Google Sheets (Lưu trữ profile chuyên gia và leads).
+- **Core Libraries**: `pandas` (Xử lý bảng), `geopy` (Tính khoảng cách), `openai` (Giao tiếp với DeepSeek).
 
-Language: Python 3.9+.
+## 2. Cấu trúc dữ liệu Chuyên gia (Google Sheets)
 
-AI Service: OpenAI API (gpt-3.5-turbo hoặc gpt-4o).
+Hệ thống sử dụng các cột chính sau:
+- `expert_id`: Mã định danh duy nhất.
+- `expert_name`: Tên chuyên gia/cố vấn.
+- `expertise`: Lĩnh vực chuyên môn chính.
+- `topics`: Danh sách các chủ đề hỗ trợ cụ thể.
+- `notebook_link`: Link dẫn tới Knowledge Base (NotebookLM).
+- `zalo_group_link`: Link nhóm cộng đồng hỗ trợ.
+- `latitude`, `longitude`: Tọa độ vị trí hỗ trợ.
 
-Database: Google Sheets (Sử dụng như một DB nhẹ để đọc danh sách cửa hàng).
-đây là thông tin header của gg sheets
-"store_id","store_name","address","category","product_info","promotion"
+## 3. Quy trình xử lý tại Backend
 
-Geospatial Logic: geopy (Để tính khoảng cách giữa tọa độ User và Shop).
+### Bước 1: Intent Extraction
+Khi người dùng gửi tin nhắn, AI sẽ trích xuất:
+- `topic`: Chủ đề học viên đang quan tâm.
+- `level`: Mức độ kiến thức người dùng đang ở (Cơ bản/Nâng cao).
+- `location_require`: Có cần tìm chuyên gia ở gần không?
 
-Data Processing: pandas (Để xử lý dữ liệu bảng từ Google Sheets).
+### Bước 2: Expert Matching
+- Backend thực hiện lọc trong DataFrame chuyên gia dựa trên `expertise` và `topics`.
+- Nếu có tọa độ người dùng, thực hiện tính khoảng cách để tìm người gần nhất.
 
-Deployment: Uvicorn server.
+### Bước 3: RAG & AI Response
+- Backend tạo ngữ cảnh (context) từ profile các chuyên gia tìm được.
+- Gửi context và câu hỏi người dùng tới DeepSeek.
+- AI sinh câu trả lời hướng dẫn: "Dựa trên nhu cầu tìm hiểu về [Topic], mình gợi ý bạn kết nối với Chuyên gia [Name]..."
 
-2. Chuẩn bị Tài nguyên (Prerequisites)
+## 4. Đặc tả API Models
 
-Trước khi code, cần chuẩn bị các API Key và cấu hình:
-
-OpenAI API Key: Đăng ký tại platform.openai.com.
-
-Google Cloud Project:
-
-Kích hoạt Google Sheets API.
-
-Kích hoạt Google Maps Geocoding API (để chuyển địa chỉ text sang tọa độ - bước chuẩn bị dữ liệu).
-
-Tạo Service Account -> Tải file JSON Credential (credentials.json).
-
-Dữ liệu: File Google Sheet (hoặc CSV) đã có thông tin cửa hàng (như file CSV đã tạo ở bước trước).
-
-3. Cấu trúc Thư mục Dự án
-
-/backend-app
-├── main.py             # File khởi chạy chính (FastAPI app)
-├── requirements.txt    # Các thư viện cần thiết
-├── .env                # Lưu API Key bảo mật
-├── services/
-│   ├── ai_service.py   # Logic gọi OpenAI
-│   ├── sheet_service.py# Logic đọc dữ liệu từ Google Sheets
-│   └── geo_service.py  # Logic tính toán khoảng cách
-└── models.py           # Định nghĩa Pydantic Models (Input/Output)
-
-
-4. Các bước Thực hiện Chi tiết
-
-Bước 1: Cài đặt Môi trường (Environment Setup)
-
-Cài đặt các thư viện cần thiết.
-File requirements.txt:
-
-fastapi
-uvicorn
-openai
-pandas
-gspread
-oauth2client
-geopy
-python-dotenv
-
-
-Bước 2: Chuẩn hóa Dữ liệu (Data Pre-processing)
-
-Vấn đề: Google Sheets chứa địa chỉ dạng Text ("768 Đường Láng"), nhưng User gửi lên Lat/Long. Backend không thể so sánh Text với Lat/Long trực tiếp.
-Giải pháp: Viết một script chạy 1 lần (one-time script) để Geocoding.
-
-Đọc cột address từ Sheet.
-
-Dùng Google Maps API (hoặc thư viện geopy với Nominatim - miễn phí nhưng chậm) để lấy Lat/Long.
-
-Ghi ngược lại 2 cột latitude và longitude vào Sheet.
-
-Kết quả: Dữ liệu trong Sheet sẽ có đầy đủ tọa độ để Backend tính toán nhanh.
-
-Bước 3: Xây dựng Core Logic (Services)
-
-A. Sheet Service (services/sheet_service.py)
-
-Sử dụng gspread để kết nối Google Sheets bằng credentials.json.
-
-Tải toàn bộ dữ liệu cửa hàng vào pandas DataFrame khi khởi động Server (Caching in-memory).
-
-Lợi ích: Truy vấn cực nhanh, không cần gọi API Google Sheets mỗi lần user chat (tránh quota limit).
-
-B. Geo Service (services/geo_service.py)
-
-Input: user_lat, user_long và DataFrame danh sách cửa hàng.
-
-Logic:
-
-Duyệt qua danh sách cửa hàng.
-
-Dùng geopy.distance.geodesic tính khoảng cách từ User đến từng Shop.
-
-Sort (sắp xếp) theo khoảng cách tăng dần.
-
-Lấy ra Shop đầu tiên (gần nhất).
-
-Output: Thông tin chi tiết của Shop gần nhất (Tên, Info, Promo, Distance).
-
-C. AI Service (services/ai_service.py)
-
-Sử dụng thư viện openai.
-
-Prompt Engineering:
-
-System: Bạn là trợ lý ảo bán hàng.
-Context: Khách hàng đang ở cách shop [Store Name] khoảng [Distance] km.
-Thông tin shop: [Product Info]. Khuyến mãi: [Promotion].
-Nhiệm vụ: Trả lời câu hỏi của khách hàng dựa trên thông tin shop. Mời khách đến địa chỉ [Address].
-User Query: [User Message]
-
-
-Bước 4: Xây dựng API với FastAPI (main.py)
-
-Cấu hình CORS
-
-Bắt buộc cấu hình allow_origins=["*"] để Frontend (chạy localhost hoặc domain khác) gọi được API.
-
-Định nghĩa Data Model (models.py)
-
-from pydantic import BaseModel
-
+### ChatRequest
+```python
 class ChatRequest(BaseModel):
     message: str
     latitude: float
     longitude: float
+```
 
-class StoreInfo(BaseModel):
+### ExpertInfo
+```python
+class ExpertInfo(BaseModel):
     name: str
-    address: str
+    expertise: str
     lat: float
     lng: float
-    distance_km: float
+    knowledge_link: str
+    zalo_link: str
+```
 
+### ChatResponse
+```python
 class ChatResponse(BaseModel):
     reply: str
-    nearest_store: StoreInfo
+    nearest_experts: List[ExpertInfo]
+```
+
+## 5. Danh sách công việc (Checklist)
+
+- [ ] Cấu hình API Key DeepSeek và Google Sheets Service Account.
+- [ ] Xây dựng service `sheet_service.py` để load profile chuyên gia.
+- [ ] Xây dựng service `ai_service.py` với prompt chuyên sâu về giáo dục/cố vấn.
+- [ ] Viết endpoint `/chat` xử lý toàn bộ luồng matching chuyên gia.
+- [ ] Đảm bảo cơ chế lưu Lead vào Google Sheets hoạt động khi học viên click kết nối.
