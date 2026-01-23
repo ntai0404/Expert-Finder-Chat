@@ -82,7 +82,7 @@ Luồng chí tiết cho UC "Chat với AI ":
       -> Hệ thống call LLM một lần nữa , gửi chính list dữ liệu đề tài trên và yêu cầu LLM thực hiện lọc dữ liệu 1 lần (loại bỏ dữ liệu lỗi ngữ nghĩa từ hệ thống) và trả về list đã lọc kèm theo 1 câu trả lời cho user bao gồm thông tin về đề tài được chọn một cách ngắn gọn.
       -> Hệ thống trả lời lại user thông qua chat bao gồm : message + Expert Card của các dữ liệu đã lọc.
          Chú ý :case này các expert card là lấy từ cột Expert_id trong list dữ liệu đã lọc; và trong expert card cũng chỉ hiện các đề tài họ phụ trách và có hiện diện trong list đã lọc.
-         ** case này có độ phức tạp cao hơn case 3.2 nếu agent code đến đoạn này còn chưa rõ gì hãy hỏi lại người đang dùng thiết bị code nhé.  
+         ***[agent đọc qua hãy chú ý đoan này] case này có độ phức tạp cao hơn case 3.2 nếu agent đến đoạn này còn chưa rõ gì hãy hỏi lại người đang dùng thiết bị coding nhé.
    3.4. LLM nhận ra yêu cầu từ user là tra cứu vị trí của user:
       -> Trả luôn biến Expert=false, Topic=false, Intent=my_location.
       -> Hệ thống gọi api gg map lấy vị trí và trả lời user theo form có sẵn.
@@ -94,11 +94,16 @@ Luồng chí tiết cho UC "Chat với AI ":
 4. Các trường hợp ngoại lệ:
    4.1. LLM không map được Intent
       -> Hệ thống trả lời rằng chưa rõ ý của khách hàng, yêu càu hỏi lại.
-   4.2. LLM không nhận diên được Expert dù intent là tìm chuyên gia
+   4.2. LLM không nhận diện được Expert dù intent là tìm chuyên gia
       -> Hệ thống trả lời rằng hiện tại chưa có sẵn thông tin về chuyên gia phù hợp với yêu cầu của khách hàng.
-   4.3. LLM không nhận diên được Topic dù intent là tìm đề tài
+   4.3. LLM không nhận diện được Topic dù intent là tìm đề tài
       -> Hệ thống trả lời rằng hiện tại chưa có sẵn thông tin về đề tài phù hợp với yêu cầu của khách hàng.
-   
+5. Các yêu cầu bắt buộc chung:
+   5.1. với các câu hỏi của user về vị trí hiện tại của user hoặc khi user mới truy cập hệ thống lên.
+   -> call api map để lấy vị trí hiện tại của user và gim lại lên map theo tỉ lệ zoom phù hợp.
+   5.2. Với các câu hỏi của user về chuyên gia hoặc/và đề tài
+   -> tính toán khoảng cách của user với từng chuyên gia để fill được thông tin khoảng cách.
+
 ##5. menu cho từng từ khóa:
 Expert: menu được khởi tạo mỗi khi hệ thống khởi động
    -> Hệ thống lấy sheet về , trong cột kinh nghiệm thì có nhiều kinh nghiệm sẽ cách nhau bằng dấu phẩy
