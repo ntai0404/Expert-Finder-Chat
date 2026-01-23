@@ -95,13 +95,15 @@ def map_to_expert_info(raw_experts: List[Dict[str, Any]]) -> List[ExpertInfo]:
         
         for t in topics_raw:
             topic_list.append(TopicInfo(
-                name=t.get('name', 'Kiến thức chuyên môn'),
+                name=t.get('topic_name') or t.get('name', 'Kiến thức chuyên môn'),
                 status=t.get('status', 'Sẵn sàng'),
-                link=t.get('link', ''),
-                image_url=t.get('image_url', '')
+                link=t.get('link/LLM') or t.get('link', ''),
+                image_url=t.get('link_img') or t.get('image_url', ''),
+                description=t.get('description', '')
             ))
             
         expert_info_list.append(ExpertInfo(
+            expert_id=str(item.get('expert_id', '')),
             name=item.get('expert_name', 'Chuyên gia'),
             expertise=item.get('expertise', ''),
             address=item.get('address', ''),

@@ -20,20 +20,27 @@ Hệ thống sử dụng các cột chính sau:
 
 ## 3. Quy trình xử lý tại Backend
 
-### Bước 1: Intent Extraction
-Khi người dùng gửi tin nhắn, AI sẽ trích xuất:
-- `topic`: Chủ đề học viên đang quan tâm.
-- `level`: Mức độ kiến thức người dùng đang ở (Cơ bản/Nâng cao).
-- `location_require`: Có cần tìm chuyên gia ở gần không?
+### Bước 1: Intent Extraction & Variable Mapping
+Khi người dùng gửi tin nhắn, AI thực hiện Call 1 để trích xuất:
+- **Expert**: Kỹ năng/Kinh nghiệm chuyên gia (nếu tìm người).
+- **Topic**: Đề tài nghiên cứu cụ thể (nếu tìm tài liệu).
+- **Intent**: Loại kịch bản (hello, thank, angry, help, my_location, Expert, Topic, Expert+Topic).
 
-### Bước 2: Expert Matching
-- Backend thực hiện lọc trong DataFrame chuyên gia dựa trên `expertise` và `topics`.
-- Nếu có tọa độ người dùng, thực hiện tính khoảng cách để tìm người gần nhất.
+### Bước 2: Phân nhánh Xử lý (Flow Logic)
+1. **Cảm xúc/Chào hỏi**: Trả về tin nhắn AI tương ứng, Expert/Topic = false.
+2. **Tìm Chuyên gia (Expert)**: Lọc sheet `Experts` theo cột `kinh_nghiem`.
+3. **Tìm Đề tài (Topic)**: Lọc sheet `Topics` theo `Chủ đề tri thức`.
+4. **Vị trí (my_location)**: Kích hoạt API Google Maps lấy tọa độ user.
 
-### Bước 3: RAG & AI Response
-- Backend tạo ngữ cảnh (context) từ profile các chuyên gia tìm được.
-- Gửi context và câu hỏi người dùng tới DeepSeek.
-- AI sinh câu trả lời hướng dẫn: "Dựa trên nhu cầu tìm hiểu về [Topic], mình gợi ý bạn kết nối với Chuyên gia [Name]..."
+### Bước 3: Data Filtering & Second LLM Call
+Đối với tìm kiếm (Expert/Topic):
+- Hệ thống gửi kết quả thô từ database cho LLM thực hiện **Call 2**.
+- LLM lọc bỏ dữ liệu nhiễu (lỗi ngữ nghĩa) và tổng hợp câu trả lời ngắn gọn.
+- **Đặc biệt (Topic Search)**: Expert Card chỉ hiển thị các đề tài có trong kết quả lọc.
+
+### Bước 4: Geolocation & Distance
+- Với các yêu cầu tìm kiếm hoặc chào hỏi: Call Geolocation API để ghim vị trí user.
+- Tính toán khoảng cách từ user đến chuyên gia để hiển thị trên Thẻ Chuyên Gia.
 
 ## 4. Đặc tả API Models
 

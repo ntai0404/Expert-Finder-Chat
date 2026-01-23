@@ -50,6 +50,8 @@ sessions: Dict[str, dict] = {}
 experts_dataframe: pd.DataFrame = pd.DataFrame()
 topics_dataframe: pd.DataFrame = pd.DataFrame()
 unique_categories: List[str] = []
+expert_menu: List[str] = []
+topic_menu: List[str] = []
 
 # --- FIREBASE INITIALIZATION ---
 fb_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
@@ -68,10 +70,10 @@ if fb_path and os.path.exists(fb_path):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_time = time.time()
-    global experts_dataframe, unique_categories, topics_dataframe
+    global experts_dataframe, unique_categories, topics_dataframe, expert_menu, topic_menu
     
     logger.info("=" * 60)
-    logger.info("🚀 INITIALIZING EXPERT FINDER SYSTEM 🚀")
+    logger.info("🚀 INITIALIZING MATRIX FINDER AI SYSTEM 🚀")
     logger.info("=" * 60)
 
     # 0. System Info
@@ -98,7 +100,7 @@ async def lifespan(app: FastAPI):
     # 3. Load Expert Data
     logger.info("Step 3: Loading Knowledge Base (Google Sheets)...")
     load_start = time.time()
-    experts_dataframe, topics_dataframe, unique_categories = await load_expert_system_data()
+    experts_dataframe, topics_dataframe, _, expert_menu, topic_menu = await load_expert_system_data()
     load_duration = time.time() - load_start
     
     if not experts_dataframe.empty:
@@ -122,10 +124,10 @@ async def lifespan(app: FastAPI):
     print("-" * 60 + "\n")
 
     yield
-    logger.info("Shutting down Expert Finder application...")
+    logger.info("Shutting down Matrix Finder AI application...")
 
 app = FastAPI(
-    title="Expert Finder API",
+    title="Matrix Finder AI API",
     description="Connect with Experts and Knowledge Topics",
     version="2.0.0",
     lifespan=lifespan
@@ -174,8 +176,13 @@ async def chat_with_ai(request: ChatRequest):
         raise HTTPException(status_code=500, detail="Expert data not loaded.")
 
     try:
-        # 1. EXTRACT INTENT (Still in AI Service as it's a pure LLM task)
-        search_intent = await extract_search_intent(request.message, unique_categories)
+        # 1. EXTRACT INTENT (Call 1) - Pass dynamic menus
+        search_intent = await extract_search_intent(
+            request.message, 
+            unique_categories,
+            expert_menu=expert_menu,
+            topic_menu=topic_menu
+        )
         logger.info(f"Expert Search Intent: {search_intent}")
         
         # 2. HANDLE CASE (Offloaded to Intent Service as requested)

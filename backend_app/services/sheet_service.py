@@ -13,12 +13,13 @@ logger = logging.getLogger(__name__)
 
 # Google Sheets Configuration
 # Google Sheets Configuration
-KNOWLEDGE_SPREADSHEET_ID = os.getenv("PRODUCT_SPREADSHEET_ID", "1FOOZFMQtm43NEW_cP94yq81Gx3RK3Hqp3xJDFEwZqKA")
+KNOWLEDGE_SPREADSHEET_ID = os.getenv("KNOWLEDGE_SPREADSHEET_ID", "1FOOZFMQtm43NEW_cP94yq81Gx3RK3Hqp3xJDFEwZqKA")
 LEAD_SPREADSHEET_ID = os.getenv("LEAD_SPREADSHEET_ID", "1N5XoXSnMKLXKtv8b_o-yZjZ9a2XVB2_9T6WRshU0ziE")
 
-# Specific Sheet Names for Expert Finder
+# Specific Sheet Names for Matrix Finder AI
 EXPERT_SHEET_NAME = "Experts"
 TOPIC_SHEET_NAME = "Topics"
+MESSAGE_LOG_SHEET_NAME = "message_log"
 
 def get_gspread_client():
     """Shared authentication logic for gspread"""
@@ -139,19 +140,19 @@ async def process_experts(experts_df, topics_df):
             'expert_id': expert_id,
             'expert_name': expert_name,
             'avatar_url': row.get('avatar_url', ''),
-            'expertise': row.get('expertise', ''),
-            'categories': row.get('categories', ''),
+            'expertise': row.get('expertise', row.get('kinh_nghiem', '')),
             'address': row.get('address', ''),
             'latitude': float(lat),
             'longitude': float(lng),
             'zalo_group_link': row.get('zalo_group_link', ''),
             'notebook_link': row.get('notebook_link', ''),
-            # Rename columns from standardized Topics sheet for the API/UI
+            # Relational Mapping: Topics now use topic_name, description, status, link/LLM, link_img
             'topics_json': expert_topics_df.rename(columns={
                 'topic_name': 'name',
-                'link': 'link',
-                'image_url': 'image_url',
-                'status': 'status'
+                'description': 'description',
+                'status': 'status',
+                'link/LLM': 'link',
+                'link_img': 'image_url'
             }).to_dict('records')
         }
         experts_list.append(expert)
@@ -161,7 +162,7 @@ async def process_experts(experts_df, topics_df):
 async def load_expert_system_data():
     """Main function to load and process expert data"""
     logger.info("=" * 60)
-    logger.info("LOADING EXPERT FINDER KNOWLEDGE BASE")
+    logger.info("LOADING MATRIX FINDER AI KNOWLEDGE BASE")
     logger.info("=" * 60)
     
     experts_df, topics_df = load_expert_data()
@@ -176,13 +177,21 @@ async def load_expert_system_data():
     logger.info(f"✅ DATA LOAD SUCCESS: {len(processed_experts_df)} experts")
     logger.info("=" * 60)
     
-    # Get unique categories for intent extraction
-    categories = []
-    if 'categories' in processed_experts_df.columns:
-        cat_series = processed_experts_df['categories'].dropna().str.split(',')
-        categories = sorted(list(set([item.strip() for sublist in cat_series for item in sublist])))
+    # Get Dynamic Menus (User Requirement 5)
+    expert_menu = []
+    # Search for 'expertise' or 'kinh_nghiem'
+    exp_col = 'kinh_nghiem' if 'kinh_nghiem' in experts_df.columns else 'expertise'
+    if exp_col in experts_df.columns:
+        exp_series = experts_df[exp_col].dropna().astype(str).str.split(',')
+        expert_menu = sorted(list(set([item.strip() for sublist in exp_series for item in sublist if item.strip()])))
+    
+    topic_menu = []
+    # New Topic Menu Source: 'topic_name'
+    tp_col = 'topic_name'
+    if tp_col in topics_df.columns:
+        topic_menu = sorted(list(set(topics_df[tp_col].dropna().astype(str).tolist())))
 
-    return processed_experts_df, topics_df, categories
+    return processed_experts_df, topics_df, [], expert_menu, topic_menu
 
 def save_lead(lead_data: dict) -> bool:
     """
@@ -196,24 +205,17 @@ def save_lead(lead_data: dict) -> bool:
 
         # 2. Open Sheet and Tab
         sheet = client.open_by_key(LEAD_SPREADSHEET_ID)
-        worksheet = sheet.worksheet("message")
+        worksheet = sheet.worksheet(MESSAGE_LOG_SHEET_NAME)
         
-        # 3. Prepare Row
-        phone_val = lead_data.get('phone') or lead_data.get('zalo_contact') or ''
-        if not phone_val or "Zalo User" in phone_val:
-             phone_val = "Chưa cung cấp"
-
+        # 3. Prepare Row (Following Sheet 3 schema in plan_sheet.md)
         row = [
             lead_data.get('timestamp', ''),
             lead_data.get('user_name', 'Khách'),
             lead_data.get('user_id', ''),
-            lead_data.get('topic_name', ''),
-            lead_data.get('expert_name', ''),
+            lead_data.get('expert_id', ''),
+            lead_data.get('topic_id', ''),
             lead_data.get('chat_context', ''),
-            phone_val,
-            lead_data.get('avatar_url', ''),
-            lead_data.get('status', 'New'),
-            lead_data.get('zalo_group_link', '')
+            lead_data.get('action', 'Click Zalo')
         ]
         
         # 4. Append

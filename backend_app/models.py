@@ -8,12 +8,14 @@ class ChatRequest(BaseModel):
 
 class TopicInfo(BaseModel):
     name: str
+    description: str = ""
     status: str = "Sẵn sàng"
     image_url: str = ""
     link: str = ""
     staff_zalo: Optional[str] = None
 
 class ExpertInfo(BaseModel):
+    expert_id: Optional[str] = None
     name: str
     expertise: str
     address: str
@@ -33,11 +35,10 @@ class ChatResponse(BaseModel):
 class LeadRequest(BaseModel):
     user_name: Optional[str] = "Khách"
     user_id: Optional[str] = None
+    expert_id: Optional[str] = None
+    topic_id: Optional[str] = None
     expert_name: Optional[str] = None
-    topic_name: str
+    topic_name: Optional[str] = None
     chat_context: str
-    zalo_contact: str = "" # Now used for Phone Number
-    avatar_url: str = "" # New field
-    phone: str = "" # Explicit field (map to zalo_contact logic)
-    zalo_group_link: str = "" # New field for precise tracking
+    action: str = "Click Zalo"
     timestamp: str = ""

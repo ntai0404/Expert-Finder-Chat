@@ -62,20 +62,23 @@ async def get_ai_response(user_msg: str, context: List[Any], intent: Dict[str, A
             return "Hệ thống AI đang bảo trì (Missing Key)."
 
     try:
-        system_prompt = f"""Bạn là trợ lý ảo 'Expert Finder' - Nền tảng kết nối học viên với Chuyên gia & Cố vấn tri thức hàng đầu.
+        system_prompt = f"""Bạn là trợ lý ảo 'Matrix Finder AI' - Nền tảng kết nối học viên với Chuyên gia & Cố vấn tri thức hàng đầu.
         Phong cách: Học thuật, chuyên nghiệp, tận tâm và luôn sử dụng emoji 🎓✨.
         
         Thông tin ngữ cảnh (Chuyên gia & Chủ đề):
         {json.dumps(context, ensure_ascii=False, indent=2)}
 
-        QUY TẮC PHÅN HỒI (QUAN TRỌNG):
-        1. Nếu ngữ cảnh (context) phía trên là rỗng [], bạn PHẢI trả lời rằng hiện tại chưa tìm thấy chuyên gia nào trong lĩnh vực này. KHÔNG ĐƯỢC bịa đặt tên chuyên gia hoặc chủ đề không có trong ngữ cảnh.
-        2. Ví dụ khi không có kết quả: "Dạ, hiện tại em chưa tìm thấy chuyên gia nào chuyên về lĩnh vực này trong danh sách hiện có ạ. Anh/chị có thể thử tìm kiếm với từ khóa khác nhé! 🎓✨"
-        3. Nếu có chuyên gia: 
-           - Chào hỏi và dẫn dắt tự nhiên.
-           - Nếu > 1 người: "Dạ, em tìm thấy chuyên gia [Tên] và một số chuyên gia khác. Mời anh/chị xem chi tiết ở thẻ bên dưới ạ! 🎓✨"
-           - Nếu = 1 người: "Dạ, em đã tìm thấy chuyên gia [Tên] phù hợp nhất. Anh/chị xem chi tiết ở thẻ bên dưới nhé!"
-        4. Trả lời cực kỳ ngắn gọn (tối đa 2 câu). Tuyệt đối không dùng danh sách Markdown.
+        Trạng thái hội thoại:
+        {json.dumps(intent, ensure_ascii=False, indent=2)}
+
+        QUY TẮC PHẢN HỒI (QUAN TRỌNG):
+        1. Nếu 'is_topic_inquiry' là true: 
+           - Giải thích ngắn gọn về Topic đó bằng kiến thức của bạn.
+           - NẾU context không rỗng: Giới thiệu chuyên gia bên dưới (vd: "Để đào sâu hơn, anh/chị có thể kết nối với Chuyên gia X bên dưới nhé!").
+           - NẾU context rỗng: Thông báo chưa có chuyên gia (vd: "Hiện tại Matrix Finder AI chưa có chuyên gia đào tạo mảng này, nhưng sơ bộ thì Topic [X] là...").
+        2. Nếu 'is_topic_inquiry' là false và context là []: Báo chưa tìm thấy chuyên gia phù hợp.
+        3. Nếu có chuyên gia: Chào hỏi, dẫn dắt tự nhiên và giới thiệu họ.
+        4. Trả lời cực kỳ ngắn gọn (tối đa 3 câu). Tuyệt đối không dùng danh sách Markdown.
         """
 
         response = client.chat.completions.create(
@@ -94,9 +97,9 @@ async def get_ai_response(user_msg: str, context: List[Any], intent: Dict[str, A
         logger.error(f"DeepSeek Chat Error: {e}")
         return "Xin lỗi, em đang bị quá tải. Anh chị chờ chút nhé!"
 
-async def extract_search_intent(query: str, categories: Optional[List[str]] = None) -> Dict[str, Any]:
+async def extract_search_intent(query: str, categories: Optional[List[str]] = None, expert_menu: List[str] = [], topic_menu: List[str] = []) -> Dict[str, Any]:
     """
-    Extracts search filters (product name, price, location) using DeepSeek.
+    Call 1: Extract search filters (Expert, Topic, Intent) using dynamic menus.
     Returns JSON.
     """
     if not client:
@@ -104,42 +107,46 @@ async def extract_search_intent(query: str, categories: Optional[List[str]] = No
         if not client: return {}
 
     try:
-        # Include categories in prompt if available to improve accuracy
-        cat_str = ", ".join(categories) if categories else "Giáo dục, Công nghệ 4.0, Kinh doanh & Khởi nghiệp, Ngoại ngữ, Nghệ thuật"
+        # Prepare menus for prompt
+        expert_menu_str = ", ".join(expert_menu[:100]) if expert_menu else "AI, Marketing, Blockchain"
+        topic_menu_str = ", ".join(topic_menu[:100]) if topic_menu else "RAG, Smart Contract, SEO"
         
         prompt = f"""
-        Phân tích câu hỏi của người dùng và trích xuất thông tin JSON phục vụ tìm kiếm Chuyên gia & Cố vấn tri thức.
+        Phân tích câu hỏi của người dùng và trích xuất thông tin JSON theo kịch bản Matrix Finder AI.
         
         Query: "{query}"
-        Lĩnh vực chuyên môn (ưu tiên khớp chính xác): {cat_str}
-        Chủ đề tri thức tiêu biểu (vd): Chatbot, RAG, Solidity, DeFi, SEO, Figma, Penetration Testing.
-        
-        Quy tắc Boolean (RẤT QUAN TRỌNG):
-        - "is_social_or_emotional": true nếu khách CHÀO HỎI (hi, chào), CẢM ƠN, hoặc BÀY TỎ CẢM XÚC (vui, buồn, khen ngợi, phàn nàn).
-        - "is_general_inquiry": true nếu khách hỏi về Expert Finder là gì, bot có thể làm gì, hoặc các câu hỏi không liên quan đến tìm kiếm chuyên môn cụ thể.
-        - "is_location_request": true chỉ khi có từ khóa địa điểm hoặc yêu cầu tìm gần đây ("ở đâu", "gần đây", "quanh đây").
 
-        Quy tắc quan trọng nhất: 
-        - Nếu người dùng hỏi bằng tiếng Việt ("học máy", "chuỗi khối", "tiếp thị"), PHẢI dịch sang TIẾNG ANH ("Machine Learning", "Blockchain", "Marketing").
-        - Nếu lĩnh vực người dùng hỏi KHÔNG có trong danh sách gợi ý (ví dụ: "nông nghiệp", "y tế"), bạn VẪN PHẢI trích xuất từ khóa đó vào "expertise" (dịch sang tiếng Anh). KHÔNG ĐƯỢC để trống nếu người dùng đang có ý định tìm kiếm.
-        - Tuyệt đối giữ nguyên các từ khóa kỹ thuật (Smart Contract, Chatbot, DeFi) và chuyển về dạng từ đơn nếu cần (vd: "chat bot" -> "Chatbot").
+        MENU HỆ THỐNG (BẮT BUỘC KHỚP NẾU CÓ THỂ):
+        - Menu Expert (Kinh nghiệm): {expert_menu_str}
+        - Menu Topic (Đề tài): {topic_menu_str}
+        - Menu Intent: Expert, Topic, my_location, Expert + Topic, angry, thank, hello, help
+
+        QUY TẮC TRÍCH XUẤT:
+        1. Expert: Gắn nhãn kinh nghiệm phù hợp từ Menu Expert. Nếu user hỏi "ai biết về", "có ai giỏi về", "tìm người"... thì MUST set Expert. Nếu không có trong menu, hãy trích xuất từ khóa chính bằng tiếng Anh. Nếu không tìm người, để false.
+        2. Topic: Gắn nhãn đề tài phù hợp từ Menu Topic. Nếu user hỏi "có tài liệu", "có sách", "có bài viết"... thì MUST set Topic. Nếu không có trong menu, trích xuất từ khóa chính. Nếu không tìm đề tài, để false.
+        3. Intent: 
+           - 'hello': Chào hỏi xã giao.
+           - 'thank': Cảm ơn.
+           - 'angry': Phàn nàn, tức giận.
+           - 'help': Hỏi về chức năng hệ thống.
+           - 'my_location': Hỏi vị trí hiện tại/gần đây.
+           - 'Expert': Người dùng đang tìm Chuyên gia/Cố vấn.
+           - 'Topic': Người dùng đang tìm Đề tài/Kiến thức/Tài liệu.
+           - 'Expert + Topic': Tìm cả hai (vd: "Có ai giỏi AI và có tài liệu RAG không?").
 
         Output Format (JSON strict):
         {{
-            "expertise": "Lĩnh vực chuyên môn (vd: Agriculture, AI, Blockchain).",
-            "topic": "Chủ đề cụ thể (vd: RAG, Smart Contracts, Chatbot).",
-            "keyword": "từ khóa gốc người dùng nhập",
-            "location": "",
-            "is_location_request": boolean,
-            "is_general_inquiry": boolean,
-            "is_social_or_emotional": boolean
+            "Expert": "string or false",
+            "Topic": "string or false",
+            "Intent": "one from menu intent",
+            "keyword": "từ khóa gốc"
         }}
         """
 
         response = client.chat.completions.create(
             model="deepseek-chat",
             messages=[
-                {"role": "system", "content": "You are a JSON extractor."},
+                {"role": "system", "content": "You are a specialized Intent Extractor for Matrix Finder AI."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
@@ -148,7 +155,59 @@ async def extract_search_intent(query: str, categories: Optional[List[str]] = No
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         logger.error(f"Intent Extraction Error: {e}")
-        return {}
+        return {"Expert": False, "Topic": False, "Intent": "help"}
+
+async def summarize_and_filter_results(user_msg: str, results_context: List[Any], intent_vars: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Call 2: Semantically filter results and provide a concise summary.
+    Returns JSON { "reply": "...", "kept_expert_ids": [...], "kept_topic_names": [...] }
+    """
+    if not client:
+        configure_genai()
+        if not client: return {"reply": "Hệ thống đang bận, vui lòng thử lại sau.", "kept_expert_ids": [], "kept_topic_names": []}
+
+    try:
+        prompt = f"""
+        Dưới đây là yêu cầu của người dùng và kết quả thô từ cơ sở dữ liệu.
+        
+        NHIỆM VỤ:
+        1. Lọc bỏ dữ liệu lỗi ngữ nghĩa (vd: user hỏi 'AI' nhưng kết quả là 'Tâm linh' do trùng chữ cái).
+        2. Sinh câu trả lời tổng hợp các kết quả tìm thấy (TỐI ĐA 3 CÂU). 
+        3. Nếu Intent là 'Expert': Hãy giới thiệu về các chuyên gia.
+        4. Nếu Intent là 'Topic': Hãy giới thiệu về các đề tài.
+        5. QUAN TRỌNG: Hãy giữ lại TẤT CẢ các ID chuyên gia và Tên đề tài thực sự liên quan đến yêu cầu từ dữ liệu thô. KHÔNG ĐƯỢC chỉ chọn 1 cái duy nhất.
+
+        Yêu cầu: "{user_msg}"
+        Dữ liệu thô: {json.dumps(results_context, ensure_ascii=False)}
+        Ý định: {json.dumps(intent_vars, ensure_ascii=False)}
+
+        PHONG CÁCH: Chuyên nghiệp, tận tâm, sử dụng emoji 🎓✨.
+
+        Output Format (JSON strict):
+        {{
+            "reply": "câu trả lời tổng hợp các kết quả phù hợp",
+            "kept_expert_ids": ["ID1", "ID2", ...],
+            "kept_topic_names": ["Tên chủ đề 1", "Tên chủ đề 2", ...]
+        }}
+        """
+
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "You are Matrix Finder AI Assistant. Filter and summarize results."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        logger.error(f"Summarize/Filter Error: {e}")
+        return {
+            "reply": "Dạ, em tìm thấy một số thông tin phù hợp, mời anh/chị xem chi tiết bên dưới nhé! 🎓✨",
+            "kept_expert_ids": [str(r.get('expert_id')) for r in results_context],
+            "kept_topic_names": []
+        }
 
 async def expert_logic_template(query: str, experts: List[Any]) -> Dict[str, Any]:
     """

@@ -91,7 +91,7 @@ console.log("🚀 script_app.js v3.9 - ONCE-ONLY LEAD MODAL...");
 
 // DUAL ACTION: Join Group + Chat with Admin/Staff
 // Global function to be accessible by onclick handlers
-function handleDualZaloAction(groupLink, productName, staffZalo) {
+function handleDualZaloAction(groupLink, topicName, staffZalo) {
     // 1. Prepare Admin Chat Link (Deep Link)
     // If staffZalo is provided (from Link NV), use it. Otherwise placeholder or skip.
     // If staffZalo is missing or invalid, we prioritize Group Link only.
@@ -99,7 +99,7 @@ function handleDualZaloAction(groupLink, productName, staffZalo) {
     let adminChatLink = "";
 
     if (staffZalo && staffZalo.length > 8) {
-        const msg = encodeURIComponent(`Chào bạn, tôi quan tâm chủ đề tri thức: ${productName}. Nhờ hỗ trợ!`);
+        const msg = encodeURIComponent(`Chào bạn, tôi quan tâm chủ đề tri thức: ${topicName}. Nhờ hỗ trợ!`);
         adminChatLink = `https://zalo.me/${staffZalo}?text=${msg}`;
     }
 
@@ -265,6 +265,10 @@ function updateMap(userLat, userLng, experts) {
         userMarker.addListener("click", () => infoWindow.open(map, userMarker));
 
         map.panTo(userPos);
+        // FIX: Reset zoom if no experts are found, to avoid staying zoomed out from previous fitBounds
+        if (!experts || experts.length === 0) {
+            map.setZoom(13);
+        }
     }
 
     // 2. Handle Expert Markers
@@ -617,8 +621,8 @@ async function sendMessage() {
 
     const typingIndicator = renderMessage('ai', '<div class="typing-indicator"><span></span><span></span><span></span></div>', false); // Don't save this
 
-    // Use cached location if available to prevent repeated prompts
-    const location = currentUserLocation || await getUserLocation();
+    // ONLY use cached location if already known; don't prompt on every message
+    const location = currentUserLocation;
 
     const aiResponse = await fetchAIResponse(userMessage, location);
 
@@ -789,13 +793,13 @@ async function handleLocationCheck(isAutoTriggered = false) {
             // Updated logic: ALWAYS silent for auto-trigger (as requested by user)
             // Manual click (!isAutoTriggered) still shows feedback
             if (!isAutoTriggered) {
-                const prefix = acc <= 200 ? "Tuyệt vời! 🐝" : "Dạ,";
-                renderMessage('ai', `${prefix} Beenet đã nhận được vị trí của bạn${addressText}. Hãy nói cho mình biết bạn cần tìm gì nhé!`, true);
+                const prefix = acc <= 200 ? "Tuyệt vời!" : "Dạ,";
+                renderMessage('ai', `${prefix} Matrix Finder AI đã nhận được vị trí của bạn${addressText}. Hãy nói cho mình biết bạn cần tìm gì nhé!`, true);
             }
             // Still mark resolved so we don't nag
             sessionStorage.setItem('locationResolved', 'true');
         } else if (!isAutoTriggered) {
-            renderMessage('ai', 'Oops! 😅 Beenet chưa thể lấy được vị trí của bạn. Bạn hãy kiểm tra lại cài đặt trình duyệt giúp mình nhé!', true);
+            renderMessage('ai', 'Oops! 😅 Matrix Finder AI chưa thể lấy được vị trí của bạn. Bạn hãy kiểm tra lại cài đặt trình duyệt giúp mình nhé!', true);
         }
     } catch (err) {
         console.error("Location error:", err);
@@ -900,17 +904,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Send welcome message (Only in Normal Mode and if no existing history)
         if (chatHistory.length === 0 && !sessionStorage.getItem('welcomeShown')) {
             setTimeout(() => {
-                appendMessage('ai', 'Xin chào! Chào mừng bạn đến với <b>Expert Finder</b> 🐝✨<br>Nền tảng kết nối tri thức và chuyên gia hàng đầu. Em có thể hỗ trợ anh/chị tìm kiếm cố vấn trong lĩnh vực nào hôm nay ạ?');
+                appendMessage('ai', 'Xin chào! Chào mừng bạn đến với <b>Matrix Finder AI</b> ✨<br>Nền tảng kết nối tri thức và chuyên gia hàng đầu. Em có thể hỗ trợ anh/chị tìm kiếm cố vấn trong lĩnh vực nào hôm nay ạ?');
                 sessionStorage.setItem('welcomeShown', 'true');
 
-                // Proactively ask for permission
+                // Proactively ask for permission (Requirement 5.1 updated)
                 if (!currentUserLocation) {
-                    setTimeout(() => {
-                        const ask = window.confirm("Expert Finder muốn biết vị trí của bạn để tìm cửa hàng gần nhất nhé?");
-                        if (ask) {
-                            handleLocationCheck(true);
-                        }
-                    }, 1500);
+                    console.log("📍 Initial app load: checking location...");
+                    handleLocationCheck(true);
                 }
             }, 500);
         } else {
@@ -944,12 +944,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // OTHER PARAMS (Proxies, Deep links)
-    const productId = urlParams.get('product_interest');
-    const productName = urlParams.get('product_name');
+    const topicId = urlParams.get('topic_interest');
+    const topicName = urlParams.get('topic_name');
     const zaloFromUrl = urlParams.get('zalo');
     const staffZaloFromUrl = urlParams.get('staff_zalo');
 
-    console.log("DEBUG: Init Params - ID:", productId, "Name:", productName, "Zalo:", zaloFromUrl, "Staff Zalo:", staffZaloFromUrl);
+    console.log("DEBUG: Init Params - ID:", topicId, "Name:", topicName, "Zalo:", zaloFromUrl, "Staff Zalo:", staffZaloFromUrl);
 
     // FIX: Clean corrupted avatar from localStorage if present
     const userPic = localStorage.getItem('user_picture');
@@ -964,11 +964,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         localStorage.removeItem('zalo_code_verifier');
     }
 
-    if (productId && productName && !sessionStorage.getItem('productProcessed_' + productId)) {
+    if (topicId && topicName && !sessionStorage.getItem('topicProcessed_' + topicId)) {
         // Prevent re-processing on refresh
-        sessionStorage.setItem('productProcessed_' + productId, 'true');
+        sessionStorage.setItem('topicProcessed_' + topicId, 'true');
 
-        const decodedName = decodeURIComponent(productName);
+        const decodedName = decodeURIComponent(topicName);
 
         // Store in global for Lead Form to use
         window.currentTopicContext = decodedName;
@@ -997,9 +997,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (zaloFromUrl && zaloFromUrl.includes('http') && staffZaloFromUrl && staffZaloFromUrl.length > 5) {
             const safeLink = zaloFromUrl.trim();
             const safeStaffZalo = staffZaloFromUrl.trim();
-            const productContext = decodedName || "Chủ đề";
+            const topicContext = decodedName || "Chủ đề";
 
-            const msg = encodeURIComponent(`Chào bạn, tôi quan tâm chủ đề tri thức: ${productContext}. Nhờ hỗ trợ!`);
+            const msg = encodeURIComponent(`Chào bạn, tôi quan tâm chủ đề tri thức: ${topicContext}. Nhờ hỗ trợ!`);
             const staffLink = safeStaffZalo ? `https://zalo.me/${safeStaffZalo}?text=${msg}` : "";
 
             let buttonsHtml = `<div>Bấm vào link bên dưới để kết nối:</div>`;
@@ -1020,7 +1020,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(async () => {
             try {
                 // Use standard API path
-                const response = await fetch(`${window.location.origin}/api/expert-info/${productId}`);
+                const response = await fetch(`${window.location.origin}/api/expert-info/${topicId}`);
                 const data = await response.json();
                 console.log("DEBUG: Expert Info Data:", data);
 
@@ -1085,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     appendMessage('ai', "Không tìm thấy thông tin chuyên gia cho chủ đề này.");
                 }
             } catch (err) {
-                console.error("Error fetching product info:", err);
+                console.error("Error fetching topic info:", err);
             } finally {
                 if (statusMsg) statusMsg.remove();
             }
@@ -1108,7 +1108,7 @@ window.addEventListener('beforeunload', () => {
     console.log("💾 Maximum Persistence active: interestedTopics preserved in localStorage.");
 });
 
-// --- Helper for Product Pagination ---
+// --- Helper for Topic Pagination ---
 function revealNextBatch(btn) {
     const topicList = btn.parentElement;
     const hiddenItems = topicList.querySelectorAll('.topic-item.hidden-topic');
@@ -1356,12 +1356,12 @@ async function submitLeadPayload(phone) {
 
         console.log(`✅ Submission process complete. Array preserved (Total: ${window.interestedTopics.length}).`);
 
-        // A. ADD AI MESSAGE WITH ZALO LINK (REMOVED per user request as it is redundant)
         /*
         const phoneDisplay = phone && phone !== "None" ? phone : "chưa cung cấp SĐT";
-        const aiMessage = `Tuyệt vời! 🐝✨ Beenet đã ghi nhận bạn quan tâm đến **${productName}** tại **${shopName}**.\n\n` +
+        const phoneDisplay = phone && phone !== "None" ? phone : "chưa cung cấp SĐT";
+        const aiMessage = `Tuyệt vời! ✨ Matrix Finder AI đã ghi nhận bạn quan tâm đến **${topicName}** cùng chuyên gia **${expertName}**.\n\n` +
             `📱 SĐT của bạn: **${phoneDisplay}**\n\n` +
-            `🔗 **[Tham gia nhóm Zalo săn sale ngay!](${groupLink})**\n\n` +
+            `🔗 **[Tham gia nhóm Zalo tri thức ngay!](${groupLink})**\n\n` +
             `_Nhóm sẽ tự động mở trong giây lát..._`;
 
         renderMessage('ai', aiMessage, true);
@@ -1386,7 +1386,7 @@ async function submitLeadPayload(phone) {
 
 async function handleShare() {
     if (chatHistory.length === 0) {
-        alert("Chưa có nội dung gì để chia sẻ bạn ơi! 🐝");
+        alert("Chưa có nội dung gì để chia sẻ bạn ơi!");
         return;
     }
 

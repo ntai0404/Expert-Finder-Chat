@@ -27,10 +27,12 @@ Dữ liệu được quản lý qua Google Sheets để dễ dàng cập nhật.
 
 ### Giai đoạn 2: Backend Development (FastAPI)
 
-- **Intent Analysis**: AI phân tích câu hỏi của người dùng để hiểu họ đang cần tìm kiến thức về lĩnh vực nào (ví dụ: Công nghệ thông tin, Marketing, Kỹ năng mềm).
+- **Intent Analysis (Matrix Finder AI)**:
+  - Phân tích yêu cầu dựa trên bộ 3 biến: **Expert**, **Topic**, **Intent**.
+  - Xử lý đa kịch bản (Chào hỏi, Tìm chuyên gia, Tìm đề tài, Tra cứu vị trí, Trợ giúp).
+  - Sử dụng cơ chế "Dual-Call LLM" để lọc dữ liệu và sinh câu trả lời ngắn gọn, chính xác.
 - **Matching Service**: So khớp từ khóa từ người dùng với `expertise` và `topics` trong database chuyên gia.
-- **Prompt Engineering (RAG)**: Soạn thảo câu trả lời cho AI dựa trên profile chuyên gia tìm được.
-  - *Template gợi ý*: "Bạn là trợ lý học tập. Dựa trên nhu cầu về [Topic], mình tìm thấy Chuyên gia [Expert Name] có Knowledge Base rất chi tiết tại [Link]. Bạn có thể nghiên cứu trước hoặc tham gia nhóm Zalo để được anh ấy hỗ trợ trực tiếp."
+- **Location Support**: Tự động kích hoạt GPS khi người dùng chào hỏi hoặc hỏi vị trí.
 
 ### Giai đoạn 3: Frontend & UI Components
 

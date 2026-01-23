@@ -1,6 +1,6 @@
-# 🎓 Expert Finder - AI-Powered Professional Network
+# 🎓 Matrix Finder AI - AI-Powered Professional Network
 
-Expert Finder là nền tảng kết nối học viên với các Chuyên gia & Cố vấn tri thức hàng đầu thông qua trí tuệ nhân tạo (DeepSeek V3). Hệ thống cho phép tìm kiếm chuyên gia dựa trên vị trí thực tế, lĩnh vực chuyên môn và kho tri thức số (NotebookLM).
+Matrix Finder AI là nền tảng kết nối học viên với các Chuyên gia & Cố vấn tri thức hàng đầu thông qua trí tuệ nhân tạo (DeepSeek V3). Hệ thống cho phép tìm kiếm chuyên gia dựa trên vị trí thực tế, lĩnh vực chuyên môn và kho tri thức số (NotebookLM).
 
 ---
 
