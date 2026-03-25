@@ -689,7 +689,7 @@ function renderExpertCards(experts, save = true) {
                 </div>
             </div>
             
-            <div class="expert-distance">Cách đây: ${expert.distance_km ? expert.distance_km.toFixed(1) : '?'} km</div>
+            <div class="expert-distance">Cách đây: ${(expert.distance_km !== undefined && expert.distance_km !== null) ? expert.distance_km.toFixed(1) : '?'} km</div>
             
             ${expert.topics && expert.topics.length > 0 ? `
                 <div class="topic-list">

@@ -24,7 +24,7 @@ MESSAGE_LOG_SHEET_NAME = "message_log"
 def get_gspread_client():
     """Shared authentication logic for gspread"""
     try:
-        key_file_path = os.environ.get("GOOGLE_SHEET_KEY_PATH", "ggsheet-key.json")
+        key_file_path = os.environ.get("GOOGLE_SHEET_KEY_PATH", "ggsheet-key.json").strip('"').strip("'")
         
         # Robust path resolution if run from subdirectory
         if not os.path.isabs(key_file_path) and not os.path.exists(key_file_path):

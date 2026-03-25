@@ -61,7 +61,7 @@ expert_menu: List[str] = []
 topic_menu: List[str] = []
 
 # --- FIREBASE INITIALIZATION ---
-fb_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
+fb_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip('"').strip("'")
 if fb_path and not os.path.isabs(fb_path) and not os.path.exists(fb_path):
     # Try parent directory
     p_fb = os.path.join("..", fb_path)
