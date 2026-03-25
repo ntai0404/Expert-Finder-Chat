@@ -25,6 +25,14 @@ def get_gspread_client():
     """Shared authentication logic for gspread"""
     try:
         key_file_path = os.environ.get("GOOGLE_SHEET_KEY_PATH", "ggsheet-key.json")
+        
+        # Robust path resolution if run from subdirectory
+        if not os.path.isabs(key_file_path) and not os.path.exists(key_file_path):
+            # Try looking in parent directory (if run from backend_app)
+            parent_path = os.path.join("..", key_file_path)
+            if os.path.exists(parent_path):
+                key_file_path = parent_path
+
         if os.path.exists(key_file_path):
             client = gspread.service_account(filename=key_file_path)
             # logger.info(f"  ✓ Connected using key file: {key_file_path}")

@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.join(current_dir, "..")
 env_path = os.path.join(project_root, ".env")
+# --- LOAD ENVIRONMENT ---
+env_path = '.env'
+if not os.path.exists(env_path) and os.path.exists(os.path.join('..', '.env')):
+    env_path = os.path.join('..', '.env')
+elif os.path.exists(os.path.join('backend_app', '.env')):
+    env_path = os.path.join('backend_app', '.env')
+
 load_dotenv(env_path, override=True)
 
 # --- IMPORTS AFTER ENV LOAD ---
@@ -55,6 +62,12 @@ topic_menu: List[str] = []
 
 # --- FIREBASE INITIALIZATION ---
 fb_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH")
+if fb_path and not os.path.isabs(fb_path) and not os.path.exists(fb_path):
+    # Try parent directory
+    p_fb = os.path.join("..", fb_path)
+    if os.path.exists(p_fb):
+        fb_path = p_fb
+
 db = None
 if fb_path and os.path.exists(fb_path):
     try:
