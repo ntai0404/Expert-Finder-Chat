@@ -169,7 +169,7 @@ async def load_expert_system_data():
     
     if experts_df.empty:
         logger.error("❌ No expert data loaded from Sheets")
-        return pd.DataFrame(), pd.DataFrame(), []
+        return pd.DataFrame(), pd.DataFrame(), [], [], []
     
     processed_experts_df = await process_experts(experts_df, topics_df)
     
