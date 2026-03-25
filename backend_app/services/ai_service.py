@@ -64,17 +64,23 @@ class AIModelManager:
             self.current_nvidia_idx = (self.current_nvidia_idx + 1) % len(self.nvidia_keys)
             logger.info(f"🔄 Swapping to next NVIDIA Key (Index: {self.current_nvidia_idx})")
 
-    async def call_gemini(self, prompt: str, system_instruction: str = "", model_name: str = "gemini-1.5-flash") -> Optional[str]:
+    async def call_gemini(self, prompt: str, system_instruction: str = "", model_name: str = "models/gemini-2.5-flash") -> Optional[str]:
         if not self.gemini_keys:
             logger.warning("⚠️ No Gemini Keys available in GEMINI_KEYS")
             return None
             
+        # Refined models based on Audit: 2.5 and 3.0+ only as requested
         model_name_map = {
-            "gemini-2.0-flash": ["gemini-2.0-flash-exp", "gemini-1.5-flash-latest", "gemini-1.5-flash"],
-            "gemini-1.5-flash": ["gemini-1.5-flash-latest", "gemini-1.5-flash"]
+            "models/gemini-2.5-flash": ["models/gemini-2.5-flash", "models/gemini-3-flash-preview", "models/gemini-flash-latest"],
+            "models/gemini-2.0-flash": ["models/gemini-2.5-flash", "models/gemini-3-flash-preview"],
+            "models/gemini-3-flash-preview": ["models/gemini-3-flash-preview", "models/gemini-2.5-flash"]
         }
         
-        models_to_try = [model_name] + model_name_map.get(model_name, [])
+        # Ensure prefix models/
+        if not model_name.startswith("models/"):
+            model_name = f"models/{model_name}"
+
+        models_to_try = [model_name] + model_name_map.get(model_name, ["models/gemini-2.5-flash", "models/gemini-3-flash-preview"])
         models_to_try = list(dict.fromkeys(models_to_try))
 
         for _ in range(len(self.gemini_keys)):
@@ -93,7 +99,7 @@ class AIModelManager:
                     if response and hasattr(response, 'text'):
                         return response.text
                 except Exception as e:
-                    if "not found" in str(e).lower() or "invalid" in str(e).lower():
+                    if "429" in str(e) or "404" in str(e) or "quota" in str(e).lower():
                         continue
                     logger.error(f"❌ Gemini API Error (Key: {key[:6]}..., Model: {m_name}): {e}")
                     break
